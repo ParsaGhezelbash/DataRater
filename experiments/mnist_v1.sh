@@ -1,0 +1,15 @@
+python data_rater_main.py \
+    --dataset_name=mnist \
+    --inner_model_name=ToyCNN \
+    --data_rater_model_name=DataRater \
+    --train_split_ratio=0.9 \
+    --batch_size=128 \
+    --inner_lr=1e-3 \
+    --outer_lr=1e-3 \
+    --meta_steps=1000 \
+    --inner_steps=10 \
+    --meta_refresh_steps=10 \
+    --grad_clip_norm=1.0 \
+    --num_inner_models=8 \
+    --save_data_rater_checkpoint=True \
+    --log=True
