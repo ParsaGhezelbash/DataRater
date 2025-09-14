@@ -15,6 +15,7 @@ class DataRaterConfig:
                  grad_clip_norm=1.0,
                  num_inner_models=4,
                  device="cuda" if torch.cuda.is_available() else "cpu",
+                 loss_type="mse",
                  save_data_rater_checkpoint=False,
                  log=False):
         self.inner_model_class = inner_model_class
@@ -30,5 +31,6 @@ class DataRaterConfig:
         self.grad_clip_norm = grad_clip_norm
         self.num_inner_models = num_inner_models
         self.device = device
+        self.loss_type = loss_type
         self.save_data_rater_checkpoint = save_data_rater_checkpoint
         self.log = log

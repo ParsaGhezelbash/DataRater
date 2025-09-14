@@ -5,9 +5,9 @@ python data_rater_main.py \
     --train_split_ratio=0.9 \
     --batch_size=128 \
     --inner_lr=1e-3 \
-    --outer_lr=1e-3 \
-    --meta_steps=1000 \
-    --inner_steps=10 \
+    --outer_lr=1e-4 \
+    --meta_steps=100 \
+    --inner_steps=2 \
     --meta_refresh_steps=10 \
     --grad_clip_norm=1.0 \
     --num_inner_models=8 \

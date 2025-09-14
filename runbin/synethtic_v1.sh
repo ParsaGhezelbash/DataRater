@@ -1,0 +1,16 @@
+python data_rater_main.py \
+    --dataset_name=synthetic1 \
+    --inner_model_name=ToyMLP \
+    --data_rater_model_name=RegressionDataRater \
+    --train_split_ratio=0.6 \
+    --batch_size=32 \
+    --inner_lr=1e-4 \
+    --outer_lr=1e-4 \
+    --meta_steps=10000 \
+    --inner_steps=10 \
+    --meta_refresh_steps=10000 \
+    --grad_clip_norm=1.0 \
+    --num_inner_models=4 \
+    --loss_type=mse \
+    --save_data_rater_checkpoint=True \
+    --log=True

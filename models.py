@@ -47,10 +47,44 @@ class DataRater(nn.Module):
         return self.head(features).squeeze(-1)
 
 
+class ToyMLP(nn.Module):
+    """Simple 2-layer MLP for regression tasks."""
+    
+    def __init__(self, input_dim=10, hidden_dim=64):
+        super(ToyMLP, self).__init__()
+        self.layers = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 1)  # Single output for regression
+        )
+    
+    def forward(self, x):
+        return self.layers(x).squeeze(-1)  # Remove last dimension to get shape (batch_size,)
+
+class RegressionDataRater(nn.Module):
+    """The outer model (meta-learner) that learns to rate regression data."""
+    
+    def __init__(self, input_dim=10, hidden_dim=64, temperature=1.0):
+        super(RegressionDataRater, self).__init__()
+        self.layers = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.Tanh(),  # Using Tanh like in the CNN version
+            nn.Linear(hidden_dim, 1)
+        )
+        self.temperature = temperature
+    
+    def forward(self, x):
+        return self.layers(x).squeeze(-1)  # Remove last dimension
+
+
 def construct_model(model_class):
     if model_class == 'ToyCNN':
         return ToyCNN()
     elif model_class == 'DataRater':
         return DataRater()
+    elif model_class == 'ToyMLP':
+        return ToyMLP()
+    elif model_class == 'RegressionDataRater':
+        return RegressionDataRater()
     else:
         raise ValueError(f"Model {model_class} not found")

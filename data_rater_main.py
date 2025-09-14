@@ -27,7 +27,8 @@ def parse_args():
                         help='Gradient clipping norm (default: 1.0)')
     parser.add_argument('--num_inner_models', type=int, default=4,
                         help='Number of inner models (default: 4)')
-
+    parser.add_argument('--loss_type', type=str, default='mse',
+                        help='Loss type (default: mse)')
     # Dataset and model parameters
     parser.add_argument('--dataset_name', type=str, required=True, default='mnist',
                         help='Name of the dataset to use')
@@ -62,6 +63,7 @@ if __name__ == "__main__":
         grad_clip_norm=args.grad_clip_norm,
         num_inner_models=args.num_inner_models,
         device=args.device,
+        loss_type=args.loss_type,
         save_data_rater_checkpoint=args.save_data_rater_checkpoint,
         log=args.log,
     )

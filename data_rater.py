@@ -12,6 +12,7 @@ import numpy as np
 from scipy import stats  # Import the stats module from SciPy
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 
 from models import construct_model
 from config import DataRaterConfig
@@ -33,8 +34,8 @@ def inner_loop_step(config: DataRaterConfig,
     inner_model.train()
     data_rater.train()
 
-    inner_images, inner_labels = inner_batch
-    inner_images, inner_labels = inner_images.to(
+    inner_samples, inner_labels = inner_batch
+    inner_samples, inner_labels = inner_samples.to(
         config.device), inner_labels.to(config.device)
 
     # Zero gradients for the inner optimizer
@@ -42,17 +43,21 @@ def inner_loop_step(config: DataRaterConfig,
 
     # Get ratings and compute weights for the current batch
     with torch.no_grad():  # Don't track gradients for data rater here
-        ratings = data_rater(inner_images)
+        ratings = data_rater(inner_samples)
         weights = torch.softmax(ratings, dim=0)
 
     # Get predictions from the inner model
-    logits = inner_model(inner_images)
+    logits = inner_model(inner_samples)
 
     # Calculate per-sample cross-entropy loss and apply weights
-    per_sample_losses = nn.functional.cross_entropy(
-        logits, inner_labels, reduction='none')
+    if config.loss_type == 'mse':
+        per_sample_losses = nn.functional.mse_loss(logits, inner_labels, reduction='none')
+    elif config.loss_type == 'cross_entropy':
+        per_sample_losses = nn.functional.cross_entropy(
+            logits, inner_labels, reduction='none')
+    else:
+        raise ValueError(f"Loss type {config.loss_type} not supported")
     weighted_loss = (per_sample_losses * weights).mean()
-
     # Update the inner model
     weighted_loss.backward()
     torch.nn.utils.clip_grad_norm_(inner_model.parameters(), config.grad_clip_norm)
@@ -90,18 +95,23 @@ def outer_loop_step(config: DataRaterConfig,
 
     # Get a single outer batch to evaluate all models
     try:
-        outer_images, outer_labels = next(val_iterator)
+        outer_samples, outer_labels = next(val_iterator)
     except StopIteration:
         val_iterator = iter(val_loader)
-        outer_images, outer_labels = next(val_iterator)
-    outer_images, outer_labels = outer_images.to(
+        outer_samples, outer_labels = next(val_iterator)
+    outer_samples, outer_labels = outer_samples.to(
         config.device), outer_labels.to(config.device)
 
     # --- 3. Calculate and average the outer loss across the population ---
     outer_losses = []
     for model in inner_models:
-        outer_logits = model(outer_images)
-        outer_loss = nn.functional.cross_entropy(outer_logits, outer_labels)
+        outer_logits = model(outer_samples)
+        if config.loss_type == 'mse':
+            outer_loss = nn.functional.mse_loss(outer_logits, outer_labels)
+        elif config.loss_type == 'cross_entropy':
+            outer_loss = nn.functional.cross_entropy(outer_logits, outer_labels)
+        else:
+            raise ValueError(f"Loss type {config.loss_type} not supported")
         outer_losses.append(outer_loss)
 
     average_outer_loss = torch.mean(torch.stack(outer_losses))
@@ -121,7 +131,11 @@ def run_meta_training(config: DataRaterConfig):
     Initializes models and orchestrates the main meta-training loop.
     Manages a population of inner models and refreshes them periodically.
     """
-    run_id = str(uuid.uuid4())
+    # Generate run_id with dataset name and timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    run_id = f"{config.dataset_name}_{timestamp}_{str(uuid.uuid4())[:8]}"
+
+    print(f"Run ID: {run_id}")
     logging_context = LoggingContext(run_id=run_id, outer_loss=[])
     # --- Initial Setup ---
     data_rater = construct_model(config.data_rater_model_class).to(config.device)
