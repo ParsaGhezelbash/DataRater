@@ -1,5 +1,7 @@
 # DataRater: Meta-Learning for Data Quality Assessment
 
+**Implementation of the DataRater (Calian et. al.) paper: https://arxiv.org/abs/2505.17895**
+
 DataRater is a meta-learning framework that learns to assess data quality and reweight training samples to improve model performance. It uses a two-level optimization approach where an outer "DataRater" model learns to score data samples while inner models are trained on the reweighted data.
 
 ## Overview
