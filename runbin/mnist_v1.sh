@@ -6,10 +6,11 @@ python data_rater_main.py \
     --batch_size=128 \
     --inner_lr=1e-3 \
     --outer_lr=1e-4 \
-    --meta_steps=100 \
-    --inner_steps=2 \
-    --meta_refresh_steps=10 \
+    --meta_steps=1000 \
+    --inner_steps=20 \
+    --meta_refresh_steps=1000 \
     --grad_clip_norm=1.0 \
-    --num_inner_models=8 \
+    --num_inner_models=4 \
+    --loss_type=cross_entropy \
     --save_data_rater_checkpoint=True \
     --log=True

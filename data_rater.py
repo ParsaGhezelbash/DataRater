@@ -126,6 +126,45 @@ def outer_loop_step(config: DataRaterConfig,
 
     return average_outer_loss.item()
 
+def compute_regression_coefficient(config: DataRaterConfig, dataset_handler, data_rater, test_loader):
+    """
+    Computes the regression coefficient of the data rater and 
+    corruption level of a given sample.
+    """
+
+    data_rater.eval()
+
+    weights = []
+    corruption_levels = []
+
+    for i, (batch_samples, batch_labels) in enumerate(test_loader):
+        # samples in the batch
+        batch_samples, batch_labels = batch_samples.to(config.device), batch_labels.to(config.device)
+        batch_size = batch_samples.size(0)
+        individually_corrupted_batch = torch.zeros_like(batch_samples)
+        fractions_for_this_batch = []
+        
+        for j in range(batch_size):
+            # determine the corruption level for this sample
+            frac = np.random.uniform(0.0, 1.0)
+
+            # append the corruption level for this sample
+            fractions_for_this_batch.append(frac)
+
+            # corrupt the sample
+            original_sample = batch_samples[j:j+1]
+            corrupted_sample = dataset_handler.corrupt_samples(original_sample, frac)
+            individually_corrupted_batch[j] = corrupted_sample
+            
+        with torch.no_grad():
+            scores = data_rater(individually_corrupted_batch)
+            scores_softmax = torch.softmax(scores, dim=0)
+            weights.extend(scores_softmax.cpu().numpy())
+            corruption_levels.extend(fractions_for_this_batch)
+
+    slope, intercept, r_value, p_value, std_err = stats.linregress(corruption_levels, weights)
+    return slope, intercept, r_value, p_value, std_err
+
 def run_meta_training(config: DataRaterConfig):
     """
     Initializes models and orchestrates the main meta-training loop.
@@ -141,7 +180,7 @@ def run_meta_training(config: DataRaterConfig):
     data_rater = construct_model(config.data_rater_model_class).to(config.device)
     outer_optimizer = optim.Adam(data_rater.parameters(), lr=config.outer_lr)
 
-    train_loader, val_loader, test_loader = get_dataset_loaders(config)
+    dataset_handler, (train_loader, val_loader, test_loader) = get_dataset_loaders(config)
     train_iterator = iter(train_loader)
     val_iterator = iter(val_loader)
 
@@ -193,6 +232,15 @@ def run_meta_training(config: DataRaterConfig):
             writer.writerow(["meta_step", "outer_loss"])
             for i, loss in enumerate(logging_context.outer_loss):
                 writer.writerow([i, loss])
+
+
+    slope, intercept, r_value, p_value, std_err = compute_regression_coefficient(config, dataset_handler, data_rater, test_loader)
+    print(f"Regression coefficient: "
+          f"Slope: {slope:.4f}, "
+          f"Intercept: {intercept:.4f}, "
+          f"R-value: {r_value:.4f}, "
+          f"P-value: {p_value:.4f}, "
+          f"Std-err: {std_err:.4f}")
 
     print("\n✅ Training complete!")
     return data_rater

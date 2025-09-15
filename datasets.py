@@ -280,7 +280,7 @@ def get_dataset_loaders(config: DataRaterConfig) -> tuple:
     else:
         raise ValueError(f"Dataset {config.dataset_name} not supported.")
 
-    return dataset_handler.get_loaders(
+    return dataset_handler, dataset_handler.get_loaders(
         config.batch_size,
         config.train_split_ratio,
         DataCorruptionConfig()
