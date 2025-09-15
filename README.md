@@ -1,4 +1,4 @@
-# DataRater: Meta-Learning for Data Quality Assessment
+# DataRater: Meta-Learned Dataset Curation
 
 **Implementation of the DataRater (Calian et. al.) paper: https://arxiv.org/abs/2505.17895**
 
