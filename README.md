@@ -16,7 +16,7 @@ The framework consists of:
 ### Prerequisites
 
 ```bash
-pip install torch torchvision tqdm matplotlib numpy scipy
+pip install -r requirements.txt
 ```
 
 ### Basic Usage
