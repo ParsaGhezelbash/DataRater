@@ -216,6 +216,15 @@ def run_meta_training(config: DataRaterConfig):
             tqdm.write(
                 f"  [Meta-Step {meta_step + 1}/{config.meta_steps}] Outer Loss: {outer_loss:.4f}")
 
+        if (meta_step + 1) % 100 == 0:
+            slope, intercept, r_value, p_value, std_err = compute_regression_coefficient(config, dataset_handler, data_rater, test_loader)
+            print(f"Iteration {meta_step + 1} Regression coefficient: "
+                  f"Slope: {slope:.4f}, "
+                  f"Intercept: {intercept:.4f}, "
+                  f"R-value: {r_value:.4f}, "
+                  f"P-value: {p_value:.4f}, "
+                  f"Std-err: {std_err:.4f}")
+
     if config.save_data_rater_checkpoint:
         run_dir = os.path.join("experiments", run_id)
         os.makedirs(run_dir, exist_ok=True)

@@ -2,12 +2,12 @@ python data_rater_main.py \
     --dataset_name=mnist \
     --inner_model_name=ToyCNN \
     --data_rater_model_name=DataRater \
-    --train_split_ratio=0.9 \
+    --train_split_ratio=0.8 \
     --batch_size=128 \
-    --inner_lr=1e-3 \
-    --outer_lr=1e-4 \
-    --meta_steps=1000 \
-    --inner_steps=20 \
+    --inner_lr=1e-4 \
+    --outer_lr=1e-5 \
+    --meta_steps=10000 \
+    --inner_steps=10 \
     --meta_refresh_steps=1000 \
     --grad_clip_norm=1.0 \
     --num_inner_models=4 \
