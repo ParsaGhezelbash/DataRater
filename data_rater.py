@@ -23,108 +23,151 @@ class LoggingContext:
     run_id: str
     outer_loss: list[float]
 
-def inner_loop_step(config: DataRaterConfig,
-                    inner_model, 
-                    inner_optimizer, 
-                    data_rater, 
-                    inner_batch):
+from torch.nn.utils.stateless import functional_call  # NEW
+
+# --- NEW: Differentiable inner loop (manual SGD, no optim.step) ---
+def call_with_fast(model, fast_params, x):
+    params = dict(model.named_parameters())
+    buffers = dict(model.named_buffers())
+    # replace only params with fast ones; keep real buffers
+    merged = {**buffers, **params}
+    merged.update(fast_params)
+    return functional_call(model, merged, (x,), strict=False)
+
+def inner_unroll_differentiable(
+    config: DataRaterConfig,
+    inner_model: nn.Module,
+    data_rater: nn.Module,
+    train_iterator,
+    train_loader,
+    T: int,
+):
     """
-    Performs a single training step for the inner model.
+    Returns the 'fast' params after T differentiable SGD steps
+    starting from the current inner_model params.
     """
     inner_model.train()
     data_rater.train()
 
-    inner_samples, inner_labels = inner_batch
-    inner_samples, inner_labels = inner_samples.to(
-        config.device), inner_labels.to(config.device)
+    # Start from the model's current (base) parameters
+    fast_params = {name: p.clone().detach().requires_grad_(True)
+                   for name, p in inner_model.named_parameters()}
 
-    # Zero gradients for the inner optimizer
-    inner_optimizer.zero_grad()
+    tau = getattr(config, "rater_softmax_temperature", 1.0)  # optional config; default=1.0
 
-    # Get ratings and compute weights for the current batch
-    with torch.no_grad():  # Don't track gradients for data rater here
-        ratings = data_rater(inner_samples)
-        weights = torch.softmax(ratings, dim=0)
+    for _ in range(T):
+        # Get next batch (wrap iterator if needed)
+        try:
+            inner_samples, inner_labels = next(train_iterator)
+        except StopIteration:
+            train_iterator = iter(train_loader)
+            inner_samples, inner_labels = next(train_iterator)
 
-    # Get predictions from the inner model
-    logits = inner_model(inner_samples)
+        inner_samples = inner_samples.to(config.device)
+        inner_labels = inner_labels.to(config.device)
 
-    # Calculate per-sample cross-entropy loss and apply weights
-    if config.loss_type == 'mse':
-        per_sample_losses = nn.functional.mse_loss(logits, inner_labels, reduction='none')
-    elif config.loss_type == 'cross_entropy':
-        per_sample_losses = nn.functional.cross_entropy(
-            logits, inner_labels, reduction='none')
-    else:
-        raise ValueError(f"Loss type {config.loss_type} not supported")
-    weighted_loss = (per_sample_losses * weights).mean()
-    # Update the inner model
-    weighted_loss.backward()
-    torch.nn.utils.clip_grad_norm_(inner_model.parameters(), config.grad_clip_norm)
-    inner_optimizer.step()
+        # Ratings *with* grad, softmax across batch (dim=0). Optional temperature.
+        ratings = data_rater(inner_samples)                         # [B] or [B,1]
+        weights = torch.softmax(ratings / tau, dim=0).squeeze(-1)   # [B]
+
+        # Forward with fast params
+        logits = call_with_fast(inner_model, fast_params, inner_samples)
+
+        # Per-sample loss
+        if config.loss_type == 'mse':
+            per = nn.functional.mse_loss(logits, inner_labels, reduction='none')  # [B, ...]
+            if per.ndim > 1:
+                per = per.view(per.size(0), -1).mean(dim=1)
+        elif config.loss_type == 'cross_entropy':
+            per = nn.functional.cross_entropy(logits, inner_labels, reduction='none')  # [B]
+        else:
+            raise ValueError(f"Loss type {config.loss_type} not supported")
+
+        # Weight across the batch; use sum (weights already sum to 1)
+        inner_loss = (per * weights).sum()
+
+        # Compute grads wrt fast params (keep graph to backprop into η via weights)
+        grads = torch.autograd.grad(inner_loss, list(fast_params.values()),
+                                    create_graph=True, retain_graph=True)
+
+        # Optional grad clipping (by value to keep it simple here)
+        max_norm = getattr(config, "grad_clip_norm", None)
+        if max_norm is not None and max_norm > 0:
+            # simple per-tensor clamp; for true norm clip you'd need to compute norms
+            clipped_grads = []
+            for g in grads:
+                clipped_grads.append(torch.clamp(g, -max_norm, max_norm))
+            grads = clipped_grads
+
+        # Manual SGD update
+        lr = config.inner_lr
+        fast_params = {
+            name: p - lr * g
+            for (name, p), g in zip(fast_params.items(), grads)
+        }
+
+    return fast_params, train_iterator
 
 
+# --- UPDATED: Outer step using differentiable inner unroll ---
 def outer_loop_step(config: DataRaterConfig,
                     logging_context: LoggingContext,
-                    data_rater, 
-                    outer_optimizer, 
-                    inner_models, 
-                    inner_optimizers, 
-                    train_iterator, 
+                    data_rater,
+                    outer_optimizer,
+                    inner_models,         # list[nn.Module]
+                    train_iterator,
                     val_iterator,
                     train_loader,
                     val_loader):
     """
-    Performs one full meta-update step using a provided POPULATION of inner models.
+    Performs one meta-update step using a POPULATION of inner models with
+    differentiable inner updates.
     """
-    # --- 1. Run the inner loop for each model in the provided population ---
-    for model, optimizer in zip(inner_models, inner_optimizers):
-        for _ in range(config.inner_steps):
-            try:
-                inner_batch = next(train_iterator)
-            except StopIteration:
-                train_iterator = iter(train_loader)
-                inner_batch = next(train_iterator)
-
-            inner_loop_step(config, model, optimizer, data_rater, inner_batch)
-
-    # --- 2. Perform the outer update on the DataRater ---
     data_rater.train()
-    for model in inner_models:
-        model.eval()
+    for m in inner_models:
+        m.train()  # we will use training stats/buffers during inner unroll
 
-    # Get a single outer batch to evaluate all models
+    # Get one outer batch shared by all models
     try:
         outer_samples, outer_labels = next(val_iterator)
     except StopIteration:
         val_iterator = iter(val_loader)
         outer_samples, outer_labels = next(val_iterator)
-    outer_samples, outer_labels = outer_samples.to(
-        config.device), outer_labels.to(config.device)
 
-    # --- 3. Calculate and average the outer loss across the population ---
+    outer_samples = outer_samples.to(config.device)
+    outer_labels = outer_labels.to(config.device)
+
+    # Run inner unroll for each model -> fast params, then eval outer loss
     outer_losses = []
     for model in inner_models:
-        outer_logits = model(outer_samples)
+        fast_params, train_iterator = inner_unroll_differentiable(
+            config, model, data_rater, train_iterator, train_loader, config.inner_steps
+        )
+
+        # Evaluate on outer batch using the fast params
+        model.eval()
+        outer_logits = call_with_fast(model, fast_params, outer_samples)
+
         if config.loss_type == 'mse':
             outer_loss = nn.functional.mse_loss(outer_logits, outer_labels)
         elif config.loss_type == 'cross_entropy':
             outer_loss = nn.functional.cross_entropy(outer_logits, outer_labels)
         else:
             raise ValueError(f"Loss type {config.loss_type} not supported")
+
         outer_losses.append(outer_loss)
 
     average_outer_loss = torch.mean(torch.stack(outer_losses))
 
-    # --- 4. Update the DataRater using the averaged loss ---
+    # Meta-step on η
     outer_optimizer.zero_grad()
     average_outer_loss.backward()
     torch.nn.utils.clip_grad_norm_(data_rater.parameters(), config.grad_clip_norm)
     outer_optimizer.step()
 
     logging_context.outer_loss.append(average_outer_loss.item())
+    return average_outer_loss.item(), train_iterator, val_iterator
 
-    return average_outer_loss.item()
 
 def compute_regression_coefficient(config: DataRaterConfig, dataset_handler, data_rater, test_loader):
     """
@@ -157,9 +200,9 @@ def compute_regression_coefficient(config: DataRaterConfig, dataset_handler, dat
             individually_corrupted_batch[j] = corrupted_sample
             
         with torch.no_grad():
-            scores = data_rater(individually_corrupted_batch)
-            scores_softmax = torch.softmax(scores, dim=0)
-            weights.extend(scores_softmax.cpu().numpy())
+            scores = data_rater(individually_corrupted_batch).squeeze(-1)  # [B]
+            # raw, uncoupled:
+            weights.extend(scores.cpu().numpy())
             corruption_levels.extend(fractions_for_this_batch)
 
     slope, intercept, r_value, p_value, std_err = stats.linregress(corruption_levels, weights)
@@ -184,37 +227,48 @@ def run_meta_training(config: DataRaterConfig):
     train_iterator = iter(train_loader)
     val_iterator = iter(val_loader)
 
-    # Declare lists for the population of inner models and optimizers
-    inner_models, inner_optimizers = None, None
+    inner_models = None
 
     print(
-        f"Starting meta-training with a population of {config.num_inner_models} models,\
-             refreshing every {config.meta_refresh_steps} steps.")
+        f"Starting meta-training with a population of {config.num_inner_models} models, "
+        f"refreshing every {config.meta_refresh_steps} steps."
+    )
 
-    # --- The Main Training Loop ---
     for meta_step in tqdm(range(config.meta_steps), desc="Meta-Training"):
-        # Periodically refresh the entire population of inner models
         if meta_step % config.meta_refresh_steps == 0:
-            tqdm.write(
-                f"\n[Meta-Step {meta_step}] Refreshing inner model population...")
-            inner_models = [construct_model(config.inner_model_class).to(config.device)
-                            for _ in range(config.num_inner_models)]
-            inner_optimizers = [optim.Adam(
-                model.parameters(), lr=config.inner_lr) for model in inner_models]
+            tqdm.write(f"\n[Meta-Step {meta_step}] Refreshing inner model population...")
+            inner_models = [
+                construct_model(config.inner_model_class).to(config.device)
+                for _ in range(config.num_inner_models)
+            ]
 
-        # Pass the current population of models and optimizers to the step function
-        outer_loss = outer_loop_step(
+        outer_loss, train_iterator, val_iterator = outer_loop_step(
             config,
             logging_context,
             data_rater, outer_optimizer,
-            inner_models, inner_optimizers,  # Pass the lists
+            inner_models,
             train_iterator, val_iterator,
             train_loader, val_loader
         )
 
+        total = 0.0
+        for n,p in data_rater.named_parameters():
+            if p.grad is not None:
+                g = p.grad.detach()
+                total += g.abs().sum().item()
+        print(f"[η grad sum] {total:.3e}")
+
         if (meta_step + 1) % 10 == 0:
-            tqdm.write(
-                f"  [Meta-Step {meta_step + 1}/{config.meta_steps}] Outer Loss: {outer_loss:.4f}")
+            tqdm.write(f"  [Meta-Step {meta_step + 1}/{config.meta_steps}] Outer Loss: {outer_loss:.4f}")
+
+        if (meta_step + 1) % 100 == 0:
+            slope, intercept, r_value, p_value, std_err = compute_regression_coefficient(
+                config, dataset_handler, data_rater, test_loader
+            )
+            print(f"Iteration {meta_step + 1} Regression coefficient: "
+                  f"Slope: {slope:.4f}, Intercept: {intercept:.4f}, "
+                  f"R-value: {r_value:.4f}, P-value: {p_value:.4f}, Std-err: {std_err:.4f}")
+
 
     if config.save_data_rater_checkpoint:
         run_dir = os.path.join("experiments", run_id)
