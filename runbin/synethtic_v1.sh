@@ -3,13 +3,13 @@ python data_rater_main.py \
     --inner_model_name=ToyMLP \
     --data_rater_model_name=RegressionDataRater \
     --train_split_ratio=0.8 \
-    --batch_size=32 \
-    --inner_lr=1e-2 \
+    --batch_size=128 \
+    --inner_lr=1e-3 \
     --outer_lr=3e-4 \
     --meta_steps=1000 \
     --inner_steps=2 \
-    --meta_refresh_steps=100 \
-    --grad_clip_norm=1.0 \
+    --meta_refresh_steps=150 \
+    --grad_clip_norm=5.0 \
     --num_inner_models=8 \
     --loss_type=mse \
     --save_data_rater_checkpoint=True \

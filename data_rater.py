@@ -251,6 +251,13 @@ def run_meta_training(config: DataRaterConfig):
             train_loader, val_loader
         )
 
+        total = 0.0
+        for n,p in data_rater.named_parameters():
+            if p.grad is not None:
+                g = p.grad.detach()
+                total += g.abs().sum().item()
+        print(f"[η grad sum] {total:.3e}")
+
         if (meta_step + 1) % 10 == 0:
             tqdm.write(f"  [Meta-Step {meta_step + 1}/{config.meta_steps}] Outer Loss: {outer_loss:.4f}")
 
