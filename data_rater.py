@@ -68,8 +68,9 @@ def inner_unroll_differentiable(
 
         # Ratings *with* grad, softmax across batch (dim=0). Optional temperature.
         ratings = data_rater(inner_samples)                         # [B] or [B,1]
-        weights = torch.softmax(ratings / tau, dim=0).squeeze(-1)   # [B]
-
+        tau = 2.0 # temperature
+        ratings = ratings - ratings.mean(dim=0)     # shift-invariant but stabilizes scale a bit
+        weights = torch.softmax(ratings / tau, dim=0)
         # Forward with fast params
         logits = call_with_fast(inner_model, fast_params, inner_samples)
 
@@ -161,7 +162,8 @@ def outer_loop_step(config: DataRaterConfig,
 
     # Meta-step on η
     outer_optimizer.zero_grad()
-    average_outer_loss.backward()
+    for i, outer_loss in enumerate(outer_losses):
+        (outer_loss / len(outer_losses)).backward()  # average grads
     torch.nn.utils.clip_grad_norm_(data_rater.parameters(), config.grad_clip_norm)
     outer_optimizer.step()
 
@@ -251,12 +253,12 @@ def run_meta_training(config: DataRaterConfig):
             train_loader, val_loader
         )
 
-        total = 0.0
-        for n,p in data_rater.named_parameters():
-            if p.grad is not None:
-                g = p.grad.detach()
-                total += g.abs().sum().item()
-        print(f"[η grad sum] {total:.3e}")
+        # total = 0.0
+        # for n,p in data_rater.named_parameters():
+        #     if p.grad is not None:
+        #         g = p.grad.detach()
+        #         total += g.abs().sum().item()
+        # print(f"[η grad sum] {total:.3e}")
 
         if (meta_step + 1) % 10 == 0:
             tqdm.write(f"  [Meta-Step {meta_step + 1}/{config.meta_steps}] Outer Loss: {outer_loss:.4f}")
