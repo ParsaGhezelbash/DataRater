@@ -1,18 +1,24 @@
 import os
 import csv
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torchvision
-import torchvision.transforms as transforms
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-import matplotlib.patheffects as PathEffects
-import numpy as np
-from scipy import stats  # Import the stats module from SciPy
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+import numpy as np
+from scipy import stats
+
+import torchvision
+import torchvision.transforms as transforms
+
+from tqdm import tqdm
+
+import matplotlib
+matplotlib.use("Agg")  # Set backend before importing pyplot
+import matplotlib.pyplot as plt
 
 from models import construct_model
 from config import DataRaterConfig
@@ -170,6 +176,34 @@ def outer_loop_step(config: DataRaterConfig,
     logging_context.outer_loss.append(average_outer_loss.item())
     return average_outer_loss.item(), train_iterator, val_iterator
 
+def save_regression_plot(corruption_levels, weights, slope, intercept, r_value, out_dir, tag):
+    """
+    Saves a scatter + linear fit plot to <out_dir>/plots/{tag}.png.
+    """
+    os.makedirs(os.path.join(out_dir, "plots"), exist_ok=True)
+
+    r_squared = r_value ** 2
+    plt.figure(figsize=(12, 8))
+
+    # Scatter
+    plt.scatter(corruption_levels, weights, alpha=0.3, label="Individual Image Score")
+
+    # Fit line
+    x_line = np.array([min(corruption_levels), max(corruption_levels)])
+    y_line = slope * x_line + intercept
+    plt.plot(x_line, y_line, linewidth=2, color="red",
+             label=f"Linear Regression (R² = {r_squared:.3f})")
+
+    plt.title("DataRater Score vs. Individual Image Corruption", fontsize=16)
+    plt.xlabel("Fraction of Corrupted Pixels")
+    plt.ylabel("Raw Score (Rating)")
+    plt.grid(True, linestyle=":")
+    plt.legend()
+
+    out_path = os.path.join(out_dir, "plots", f"{tag}.png")  # <-- unique filename via tag
+    plt.savefig(out_path, bbox_inches="tight", dpi=150)
+    plt.close()
+
 
 def compute_regression_coefficient(config: DataRaterConfig, dataset_handler, data_rater, test_loader):
     """
@@ -208,7 +242,7 @@ def compute_regression_coefficient(config: DataRaterConfig, dataset_handler, dat
             corruption_levels.extend(fractions_for_this_batch)
 
     slope, intercept, r_value, p_value, std_err = stats.linregress(corruption_levels, weights)
-    return slope, intercept, r_value, p_value, std_err
+    return slope, intercept, r_value, p_value, std_err, corruption_levels, weights
 
 def run_meta_training(config: DataRaterConfig):
     """
@@ -221,6 +255,10 @@ def run_meta_training(config: DataRaterConfig):
 
     print(f"Run ID: {run_id}")
     logging_context = LoggingContext(run_id=run_id, outer_loss=[])
+
+    run_dir = os.path.join("experiments", run_id)
+    os.makedirs(run_dir, exist_ok=True)
+
     # --- Initial Setup ---
     data_rater = construct_model(config.data_rater_model_class).to(config.device)
     outer_optimizer = optim.Adam(data_rater.parameters(), lr=config.outer_lr)
@@ -263,19 +301,21 @@ def run_meta_training(config: DataRaterConfig):
         if (meta_step + 1) % 10 == 0:
             tqdm.write(f"  [Meta-Step {meta_step + 1}/{config.meta_steps}] Outer Loss: {outer_loss:.4f}")
 
-        if (meta_step + 1) % 100 == 0:
-            slope, intercept, r_value, p_value, std_err = compute_regression_coefficient(
+        if (meta_step) % 100 == 0:
+            slope, intercept, r_value, p_value, std_err, corruption_levels, weights = compute_regression_coefficient(
                 config, dataset_handler, data_rater, test_loader
             )
+
+             # NEW: unique filename per call (no overwrite)
+            tag = f"regression_step_{meta_step + 1:06d}"
+            save_regression_plot(corruption_levels, weights, slope, intercept, r_value, run_dir, tag)
+
             print(f"Iteration {meta_step + 1} Regression coefficient: "
                   f"Slope: {slope:.4f}, Intercept: {intercept:.4f}, "
                   f"R-value: {r_value:.4f}, P-value: {p_value:.4f}, Std-err: {std_err:.4f}")
 
 
     if config.save_data_rater_checkpoint:
-        run_dir = os.path.join("experiments", run_id)
-        os.makedirs(run_dir, exist_ok=True)
-
         # Save the data rater model checkpoint
         checkpoint_path = os.path.join(run_dir, "data_rater.pt")
         torch.save(data_rater.state_dict(), checkpoint_path)

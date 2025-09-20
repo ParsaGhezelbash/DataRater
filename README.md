@@ -22,7 +22,7 @@ pip install -r requirements.txt
 ### Basic Usage
 
 ```bash
-python data_rater_main.py --dataset_name=mnist --meta_steps=1000
+sh runbin/mnist_v1.sh
 ```
 
 ## Setting Up a New Dataset
@@ -56,11 +56,7 @@ class MyDataset(DataRaterDataset):
         # Create train/validation split
         # Wrap training data with CorruptedSubset for on-the-fly corruption
         
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5,), (0.5,))
-        ])
-        
+        #...
         # Your dataset loading logic here
         train_loader = DataLoader(corrupted_train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
@@ -157,70 +153,47 @@ def construct_model(model_class):
 from config import DataRaterConfig
 from data_rater import run_meta_training
 
+args = parse_args()
+
 config = DataRaterConfig(
-    dataset_name="mnist",
-    inner_model_class="ToyCNN",
-    data_rater_model_class="DataRater",
-    batch_size=128,
-    inner_lr=1e-3,
-    outer_lr=1e-3,
-    meta_steps=1000,
-    inner_steps=5,
-    num_inner_models=4
+    dataset_name=args.dataset_name,
+    inner_model_class=args.inner_model_name,
+    data_rater_model_class=args.data_rater_model_name,
+    batch_size=args.batch_size,
+    train_split_ratio=args.train_split_ratio,
+    inner_lr=args.inner_lr,
+    outer_lr=args.outer_lr,
+    meta_steps=args.meta_steps,
+    inner_steps=args.inner_steps,
+    meta_refresh_steps=args.meta_refresh_steps,
+    grad_clip_norm=args.grad_clip_norm,
+    num_inner_models=args.num_inner_models,
+    device=args.device,
+    loss_type=args.loss_type,
+    save_data_rater_checkpoint=args.save_data_rater_checkpoint,
+    log=args.log,
 )
-
-trained_data_rater = run_meta_training(config)
-```
-
-### Advanced Configuration
-
-```python
-config = DataRaterConfig(
-    dataset_name="my_dataset",
-    inner_model_class="MyTaskModel", 
-    data_rater_model_class="MyDataRater",
-    batch_size=64,
-    train_split_ratio=0.8,
-    inner_lr=5e-4,
-    outer_lr=1e-4,
-    meta_steps=2000,
-    inner_steps=10,
-    meta_refresh_steps=20,  # Refresh inner models every 20 steps
-    grad_clip_norm=0.5,
-    num_inner_models=8,     # Population of 8 inner models
-    device="cuda",
-    save_data_rater_checkpoint=True,
-    log=True
-)
-
-trained_data_rater = run_meta_training(config)
-```
-
-### Command Line Usage
-
-```bash
-python data_rater_main.py \
-    --dataset_name=mnist \
-    --inner_model_name=ToyCNN \
-    --data_rater_model_name=DataRater \
-    --batch_size=128 \
-    --inner_lr=1e-3 \
-    --outer_lr=1e-3 \
-    --meta_steps=1000 \
-    --inner_steps=5 \
-    --num_inner_models=4 \
-    --save_data_rater_checkpoint=True \
-    --log=True
+run_meta_training(config)
 ```
 
 ## Key Parameters
 
-- `meta_steps`: Number of outer loop optimization steps
-- `inner_steps`: Number of gradient steps for each inner model per meta-step  
-- `num_inner_models`: Population size of inner models (helps with stability)
-- `meta_refresh_steps`: How often to reinitialize the inner model population
-- `inner_lr`/`outer_lr`: Learning rates for inner models and DataRater respectively
-- `grad_clip_norm`: Gradient clipping threshold
+- `dataset_name`: Name of the dataset to use for training and evaluation.
+- `inner_model_class`: Model class name for the inner (task) model.
+- `data_rater_model_class`: Model class name for the DataRater (data weighting) model.
+- `batch_size`: Number of samples per batch for both inner and outer loops.
+- `train_split_ratio`: Fraction of data used for training (rest for validation).
+- `inner_lr`: Learning rate for inner model updates during the inner loop.
+- `outer_lr`: Learning rate for DataRater updates during the outer loop.
+- `meta_steps`: Total number of meta-training (outer loop) steps to run.
+- `inner_steps`: Number of gradient steps each inner model takes per meta-step.
+- `meta_refresh_steps`: Frequency (in meta-steps) to reinitialize the inner model population.
+- `grad_clip_norm`: Maximum norm for gradient clipping during meta-optimization.
+- `num_inner_models`: Number of inner models in the population (improves stability).
+- `device`: Device to use for training (e.g., "cuda" or "cpu").
+- `loss_type`: Loss function to use for training (e.g., "mse" or "cross_entropy").
+- `save_data_rater_checkpoint`: Whether to save the trained DataRater model checkpoint.
+- `log`: Whether to log training metrics and save logs to disk.
 
 ## Architecture Details
 
@@ -231,40 +204,12 @@ python data_rater_main.py \
 3. **Outer Loop**: DataRater optimized based on inner models' validation performance
 4. **Data Weighting**: DataRater assigns quality scores, converted to sample weights via softmax
 
-### Data Corruption
-
-The framework includes built-in data corruption for robustness training:
-
-```python
-from datasets import DataCorruptionConfig
-
-corruption_config = DataCorruptionConfig(
-    corruption_probability=0.25,        # 25% of training samples corrupted
-    corruption_fraction_range=(0.1, 0.9) # 10-90% of pixels corrupted when applied
-)
-```
 
 ## Example: MNIST Experiment
 
 ```bash
 # Run the included MNIST experiment
 bash experiments/mnist_v1.sh
-```
-
-This trains a DataRater on corrupted MNIST data, learning to identify and downweight corrupted samples while prioritizing clean, informative examples.
-
-## File Structure
-
-```
-datarater/
- README.md
- config.py              # Configuration class
- data_rater_main.py     # Main training script
- data_rater.py          # Core meta-training logic
- datasets.py            # Dataset implementations
- models.py              # Model definitions
- experiments/           # Experiment scripts
- data/                  # Dataset storage
 ```
 
 ## Contributing
