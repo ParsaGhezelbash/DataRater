@@ -29,9 +29,9 @@ class LoggingContext:
     run_id: str
     outer_loss: list[float]
 
-from torch.nn.utils.stateless import functional_call  # NEW
+from torch.nn.utils.stateless import functional_call
 
-# --- NEW: Differentiable inner loop (manual SGD, no optim.step) ---
+# Differentiable inner loop (manual SGD, no optim.step) ---
 def call_with_fast(model, fast_params, x):
     params = dict(model.named_parameters())
     buffers = dict(model.named_buffers())
@@ -116,12 +116,12 @@ def inner_unroll_differentiable(
     return fast_params, train_iterator
 
 
-# --- UPDATED: Outer step using differentiable inner unroll ---
+# --- Outer step using differentiable inner unroll ---
 def outer_loop_step(config: DataRaterConfig,
                     logging_context: LoggingContext,
                     data_rater,
                     outer_optimizer,
-                    inner_models,         # list[nn.Module]
+                    inner_models,
                     train_iterator,
                     val_iterator,
                     train_loader,
@@ -306,7 +306,6 @@ def run_meta_training(config: DataRaterConfig):
                 config, dataset_handler, data_rater, test_loader
             )
 
-             # NEW: unique filename per call (no overwrite)
             tag = f"regression_step_{meta_step + 1:06d}"
             save_regression_plot(corruption_levels, weights, slope, intercept, r_value, run_dir, tag)
 

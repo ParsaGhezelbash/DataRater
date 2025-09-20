@@ -130,7 +130,7 @@ class MNISTDataRaterDataset(DataRaterDataset):
         num_val = len(full_train_dataset) - num_train
         train_subset, val_subset = random_split(full_train_dataset, [num_train, num_val])
 
-        # ** CRITICAL STEP: Wrap the training subset to apply corruption on-the-fly **
+        # ** Wrap the training subset to apply corruption on-the-fly **
         corrupted_train_dataset = CorruptedSubset(
             original_subset=train_subset,
             corruption_fn=self.corrupt_samples,
