@@ -330,7 +330,8 @@ def run_meta_training(config: DataRaterConfig):
                 writer.writerow([i, loss])
 
 
-    slope, intercept, r_value, p_value, std_err = compute_regression_coefficient(config, dataset_handler, data_rater, test_loader)
+    slope, intercept, r_value, p_value, std_err, _, _ = \
+        compute_regression_coefficient(config, dataset_handler, data_rater, test_loader)
     print(f"Regression coefficient: "
           f"Slope: {slope:.4f}, "
           f"Intercept: {intercept:.4f}, "
