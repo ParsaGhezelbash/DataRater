@@ -212,6 +212,8 @@ run_meta_training(config)
 bash experiments/mnist_v1.sh
 ```
 
+![MNIST Run: DataRater learns to weight examples in proportion to their corruption levels](https://github.com/rishabhranawat/DataRater/blob/main/mnist_20250920_1037_a11efc10/plots/combined_grid.png)
+
 ## Contributing
 
 When adding new datasets or models:
