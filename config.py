@@ -17,7 +17,10 @@ class DataRaterConfig:
                  device="cuda" if torch.cuda.is_available() else "cpu",
                  loss_type="mse",
                  save_data_rater_checkpoint=False,
-                 log=False):
+                 log=False,
+                 attack_eps=8/255,
+                 attack_steps=10,
+                 attack_step_size=2/255):
         self.inner_model_class = inner_model_class
         self.data_rater_model_class = data_rater_model_class
         self.dataset_name = dataset_name
@@ -34,3 +37,6 @@ class DataRaterConfig:
         self.loss_type = loss_type
         self.save_data_rater_checkpoint = save_data_rater_checkpoint
         self.log = log
+        self.attack_eps = attack_eps
+        self.attack_steps = attack_steps
+        self.attack_step_size = attack_step_size

@@ -43,6 +43,13 @@ def parse_args():
                         help='Whether to save the data rater model checkpoint (default: False)')
     parser.add_argument('--log', type=bool, default=False,
                         help='Whether to log the training (default: False)')
+    # Attack parameters
+    parser.add_argument('--attack_eps', type=float, default=8/255,
+                        help='Attack perturbation strength (default: 8/255)')
+    parser.add_argument('--attack_steps', type=int, default=10,
+                        help='Number of attack steps (default: 10)')
+    parser.add_argument('--attack_step_size', type=float, default=2/255,
+                        help='Attack step size (default: 2/255)')
     return parser.parse_args()
 
 

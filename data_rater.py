@@ -17,6 +17,8 @@ import torchvision.transforms as transforms
 from tqdm import tqdm
 
 import matplotlib
+
+from attack import pgd_attack
 matplotlib.use("Agg")  # Set backend before importing pyplot
 import matplotlib.pyplot as plt
 
@@ -151,9 +153,21 @@ def outer_loop_step(config: DataRaterConfig,
             config, model, data_rater, train_iterator, train_loader, config.inner_steps
         )
 
+        # Attack on outer samples with inner model
+        model.eval()
+        adv_outer_samples = pgd_attack(
+            model, outer_samples, outer_labels,
+            loss_fn=nn.CrossEntropyLoss(),
+            eps=config.attack_eps,
+            step_size=config.attack_step_size,
+            steps=config.attack_steps,
+            random_start=True,
+            params=fast_params
+        )
+
         # Evaluate on outer batch using the fast params
         model.eval()
-        outer_logits = call_with_fast(model, fast_params, outer_samples)
+        outer_logits = call_with_fast(model, fast_params, adv_outer_samples)
 
         if config.loss_type == 'mse':
             outer_loss = nn.functional.mse_loss(outer_logits, outer_labels)
@@ -163,6 +177,11 @@ def outer_loop_step(config: DataRaterConfig,
             raise ValueError(f"Loss type {config.loss_type} not supported")
 
         outer_losses.append(outer_loss)
+
+        # Inner model update
+        with torch.no_grad():
+            for name, p in model.named_parameters():
+                p.copy_(fast_params[name])
 
     average_outer_loss = torch.mean(torch.stack(outer_losses))
 
