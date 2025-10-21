@@ -361,7 +361,7 @@ def run_meta_training(config: DataRaterConfig):
 
     print(f"Run ID: {run_id}")
     logging_context = LoggingContext(run_id=run_id,
-                                     outer_loss=[], outer_loss_clean=[], clean_accuracy=[], adv_accuracy=[], step=[])
+                                     outer_loss=[], outer_loss_clean=[], clean_accuracy=[], adv_accuracy=[], eval_step=[])
 
     run_dir = os.path.join("experiments", run_id)
     os.makedirs(run_dir, exist_ok=True)
