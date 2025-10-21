@@ -211,26 +211,27 @@ def outer_loop_step(config: DataRaterConfig,
     return average_outer_loss.item(), average_outer_loss_clean.item(), train_iterator, val_iterator
 
 
-def save_regression_plot(corruption_levels, weights, slope, intercept, r_value, out_dir, tag):
+def save_regression_plot(corruption_levels, weights, out_dir, tag, x_label, slope=None, intercept=None, r_value=None):
     """
     Saves a scatter + linear fit plot to <out_dir>/plots/{tag}.png.
     """
     os.makedirs(os.path.join(out_dir, "plots"), exist_ok=True)
 
-    r_squared = r_value ** 2
     plt.figure(figsize=(12, 8))
 
     # Scatter
     plt.scatter(corruption_levels, weights, alpha=0.3, label="Individual Image Score")
-
-    # Fit line
-    x_line = np.array([min(corruption_levels), max(corruption_levels)])
-    y_line = slope * x_line + intercept
-    plt.plot(x_line, y_line, linewidth=2, color="red",
-             label=f"Linear Regression (R² = {r_squared:.3f})")
+    
+    if slope is not None:
+        r_squared = r_value ** 2
+        # Fit line
+        x_line = np.array([min(corruption_levels), max(corruption_levels)])
+        y_line = slope * x_line + intercept
+        plt.plot(x_line, y_line, linewidth=2, color="red",
+                label=f"Linear Regression (R² = {r_squared:.3f})")
 
     plt.title("DataRater Score vs. Individual Image", fontsize=16)
-    plt.xlabel("Image level")
+    plt.xlabel(x_label)
     plt.ylabel("Raw Score (Rating)")
     plt.grid(True, linestyle=":")
     plt.legend()
@@ -305,8 +306,8 @@ def compute_rate(config: DataRaterConfig, model, data_rater, test_loader):
             preds = model(batch_samples).argmax(dim=-1)
             accuracy_values.extend((preds == batch_labels).cpu().numpy().flatten())
 
-    slope, intercept, r_value, p_value, std_err = stats.linregress(loss_values, weights)
-    return slope, intercept, r_value, p_value, std_err, loss_values, weights, accuracy_values
+    # slope, intercept, r_value, p_value, std_err = stats.linregress(loss_values, weights)
+    return loss_values, weights, accuracy_values
 
 
 def compute_rate_adv(config: DataRaterConfig, model, data_rater, test_loader):
@@ -342,8 +343,8 @@ def compute_rate_adv(config: DataRaterConfig, model, data_rater, test_loader):
             preds = model(adv_samples).argmax(dim=-1)
             accuracy_values.extend((preds == batch_labels).cpu().numpy().flatten())   
 
-    slope, intercept, r_value, p_value, std_err = stats.linregress(loss_values, weights)
-    return slope, intercept, r_value, p_value, std_err, loss_values, weights, accuracy_values
+    # slope, intercept, r_value, p_value, std_err = stats.linregress(loss_values, weights)
+    return loss_values, weights, accuracy_values
 
 
 def run_meta_training(config: DataRaterConfig):
@@ -408,25 +409,25 @@ def run_meta_training(config: DataRaterConfig):
                 config, dataset_handler, data_rater, test_loader
             )
             tag = f"regression_step_{meta_step + 1:06d}"
-            save_regression_plot(corruption_levels, weights, slope, intercept, r_value, run_dir, tag)
+            save_regression_plot(corruption_levels, weights, run_dir, tag, "corruption", slope, intercept, r_value)
 
             print(f"Iteration {meta_step + 1} Regression coefficient: "
                   f"Slope: {slope:.4f}, Intercept: {intercept:.4f}, "
                   f"R-value: {r_value:.4f}, P-value: {p_value:.4f}, Std-err: {std_err:.4f}")
 
             # Rate vs clean loss plots
-            slope, intercept, r_value, p_value, std_err, loss_values, weights, accuracy_values = compute_rate(
+            loss_values, weights, accuracy_values = compute_rate(
                 config, inner_models[0], data_rater, test_loader
             )
             tag = f"regression_clean_step_{meta_step + 1:06d}"
-            save_regression_plot(loss_values, weights, slope, intercept, r_value, run_dir, tag)
+            save_regression_plot(loss_values, weights, run_dir, tag, "clean loss")
 
             # Rate vs adv loss plots
-            slope, intercept, r_value, p_value, std_err, loss_values, weights, accuracy_values_adv = compute_rate_adv(
+            loss_values_adv, weights_adv, accuracy_values_adv = compute_rate_adv(
                 config, inner_models[0], data_rater, test_loader
             )
             tag = f"regression_adv_step_{meta_step + 1:06d}"
-            save_regression_plot(loss_values, weights, slope, intercept, r_value, run_dir, tag)
+            save_regression_plot(loss_values_adv, weights_adv, run_dir, tag, "adv loss")
 
             # Plot accuracy vs clean loss
             plt.figure(figsize=(10,6))
