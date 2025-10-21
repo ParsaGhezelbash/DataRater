@@ -31,6 +31,9 @@ class LoggingContext:
     run_id: str
     outer_loss: list[float]
     outer_loss_clean: list[float]
+    clean_accuracy: list[float]
+    adv_accuracy: list[float]
+    eval_step: list[int]
 
 from torch.func import functional_call
 
@@ -302,10 +305,7 @@ def compute_rate(config: DataRaterConfig, model, data_rater, test_loader):
 
             loss_fn = nn.CrossEntropyLoss(reduction="none") if config.loss_type == 'cross_entropy' else nn.MSELoss(reduction="none")
             preds = model(batch_samples)
-            losses = loss_fn(preds, batch_labels)
-            print(losses.cpu().numpy().shape, scores.cpu().numpy().shape)
-            loss_values.extend(losses.cpu().numpy())
-            print((preds.argmax(dim=-1) == batch_labels).cpu().numpy().shape)
+            loss_values.extend(loss_fn(preds, batch_labels).cpu().numpy())
             accuracy_values.extend((preds.argmax(dim=-1) == batch_labels).cpu().numpy())
 
     # slope, intercept, r_value, p_value, std_err = stats.linregress(loss_values, weights)
@@ -331,14 +331,16 @@ def compute_rate_adv(config: DataRaterConfig, model, data_rater, test_loader):
             scores = data_rater(batch_samples).squeeze(-1)
             weights.extend(scores.cpu().numpy())
 
-            adv_samples = pgd_attack(
-                model, batch_samples, batch_labels,
-                loss_fn=nn.CrossEntropyLoss(),
-                eps=config.attack_eps,
-                step_size=config.attack_step_size,
-                steps=config.attack_steps,
-                random_start=True
-            )
+        adv_samples = pgd_attack(
+            model, batch_samples, batch_labels,
+            loss_fn=nn.CrossEntropyLoss(),
+            eps=config.attack_eps,
+            step_size=config.attack_step_size,
+            steps=config.attack_steps,
+            random_start=True
+        )
+        
+        with torch.no_grad():
             loss_fn = nn.CrossEntropyLoss(reduction="none") if config.loss_type == 'cross_entropy' else nn.MSELoss(reduction="none")
             preds = model(adv_samples)
             loss_values.extend(loss_fn(preds, batch_labels).cpu().numpy())
@@ -358,7 +360,8 @@ def run_meta_training(config: DataRaterConfig):
     run_id = f"{config.dataset_name}_{timestamp}_{str(uuid.uuid4())[:8]}"
 
     print(f"Run ID: {run_id}")
-    logging_context = LoggingContext(run_id=run_id, outer_loss=[], outer_loss_clean=[])
+    logging_context = LoggingContext(run_id=run_id,
+                                     outer_loss=[], outer_loss_clean=[], clean_accuracy=[], adv_accuracy=[], step=[])
 
     run_dir = os.path.join("experiments", run_id)
     os.makedirs(run_dir, exist_ok=True)
@@ -422,6 +425,7 @@ def run_meta_training(config: DataRaterConfig):
             )
             tag = f"regression_clean_step_{meta_step + 1:06d}"
             save_regression_plot(loss_values, weights, run_dir, tag, "clean loss")
+            logging_context.clean_accuracy.append(np.mean(accuracy_values))
 
             # Rate vs adv loss plots
             loss_values_adv, weights_adv, accuracy_values_adv = compute_rate_adv(
@@ -429,10 +433,13 @@ def run_meta_training(config: DataRaterConfig):
             )
             tag = f"regression_adv_step_{meta_step + 1:06d}"
             save_regression_plot(loss_values_adv, weights_adv, run_dir, tag, "adv loss")
+            logging_context.adv_accuracy.append(np.mean(accuracy_values_adv))
+            
+            logging_context.eval_step.append(meta_step)
 
             # Plot accuracy vs clean loss
             plt.figure(figsize=(10,6))
-            plt.plot(accuracy_values, label='Accuracy (Clean)', color='orange')
+            plt.plot(logging_context.eval_step, logging_context.clean_accuracy, label='Accuracy (Clean)', color='orange')
             plt.xlabel('Meta Step')
             plt.ylabel('Accuracy')
             plt.title('Accuracy Over Meta Steps')
@@ -444,7 +451,7 @@ def run_meta_training(config: DataRaterConfig):
 
             # Plot accuracy vs adv loss
             plt.figure(figsize=(10,6))
-            plt.plot(accuracy_values_adv, label='Accuracy (Adv)', color='blue')
+            plt.plot(logging_context.eval_step, logging_context.adv_accuracy, label='Accuracy (Adv)', color='blue')
             plt.xlabel('Meta Step')
             plt.ylabel('Accuracy')
             plt.title('Adversarial Accuracy Over Meta Steps')
