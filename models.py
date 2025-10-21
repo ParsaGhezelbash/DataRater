@@ -39,6 +39,19 @@ class ResNet18(nn.Module):
         return self.model(x)
     
 
+class ResNetMnist(nn.Module):
+    def __init__(self):
+        super(ResNetMnist, self).__init__()
+        self.model = resnet18(weights=None)    # or weights="IMAGENET1K_V1" for pretrained
+        self.model.conv1 = nn.Conv2d(1, 64, kernel_size=3, stride=1,
+                                      padding=1, bias=False)  # adapt for 1-channel input
+        self.model.maxpool = nn.Identity()      # remove downsampling
+        self.model.fc = nn.Linear(512, 10)      # MNIST = 10 classes
+
+    def forward(self, x):
+        return self.model(x)
+
+
 class DataRater(nn.Module):
     """The outer model (meta-learner) that learns to rate data."""
 

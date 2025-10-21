@@ -30,6 +30,7 @@ from datasets import get_dataset_loaders
 class LoggingContext:
     run_id: str
     outer_loss: list[float]
+    outer_loss_clean: list[float]
 
 from torch.nn.utils.stateless import functional_call
 
@@ -148,6 +149,7 @@ def outer_loop_step(config: DataRaterConfig,
 
     # Run inner unroll for each model -> fast params, then eval outer loss
     outer_losses = []
+    outer_losses_clean = []
     for model in inner_models:
         fast_params, train_iterator = inner_unroll_differentiable(
             config, model, data_rater, train_iterator, train_loader, config.inner_steps
@@ -178,6 +180,16 @@ def outer_loop_step(config: DataRaterConfig,
 
         outer_losses.append(outer_loss)
 
+        outer_logits_clean = call_with_fast(model, fast_params, outer_samples)
+        if config.loss_type == 'mse':
+            outer_loss_clean = nn.functional.mse_loss(outer_logits_clean, outer_labels)
+        elif config.loss_type == 'cross_entropy':
+            outer_loss_clean = nn.functional.cross_entropy(outer_logits_clean, outer_labels)
+        else:
+            raise ValueError(f"Loss type {config.loss_type} not supported")
+
+        outer_losses_clean.append(outer_loss_clean)
+
         # Inner model update
         if config.model_update:
             with torch.no_grad():
@@ -185,6 +197,7 @@ def outer_loop_step(config: DataRaterConfig,
                     p.copy_(fast_params[name])
 
     average_outer_loss = torch.mean(torch.stack(outer_losses))
+    average_outer_loss_clean = torch.mean(torch.stack(outer_losses_clean))
 
     # Meta-step on η
     outer_optimizer.zero_grad()
@@ -194,7 +207,9 @@ def outer_loop_step(config: DataRaterConfig,
     outer_optimizer.step()
 
     logging_context.outer_loss.append(average_outer_loss.item())
-    return average_outer_loss.item(), train_iterator, val_iterator
+    logging_context.outer_loss_clean.append(average_outer_loss_clean.item())
+    return average_outer_loss.item(), average_outer_loss_clean.item(), train_iterator, val_iterator
+
 
 def save_regression_plot(corruption_levels, weights, slope, intercept, r_value, out_dir, tag):
     """
@@ -214,8 +229,8 @@ def save_regression_plot(corruption_levels, weights, slope, intercept, r_value, 
     plt.plot(x_line, y_line, linewidth=2, color="red",
              label=f"Linear Regression (R² = {r_squared:.3f})")
 
-    plt.title("DataRater Score vs. Individual Image Corruption", fontsize=16)
-    plt.xlabel("Fraction of Corrupted Pixels")
+    plt.title("DataRater Score vs. Individual Image", fontsize=16)
+    plt.xlabel("Image level")
     plt.ylabel("Raw Score (Rating)")
     plt.grid(True, linestyle=":")
     plt.legend()
@@ -264,6 +279,72 @@ def compute_regression_coefficient(config: DataRaterConfig, dataset_handler, dat
     slope, intercept, r_value, p_value, std_err = stats.linregress(corruption_levels, weights)
     return slope, intercept, r_value, p_value, std_err, corruption_levels, weights
 
+
+def compute_rate(config: DataRaterConfig, model, data_rater, test_loader):
+    """
+    Computes the regression coefficient of the data rater and loss on clean samples.
+    """
+
+    data_rater.eval()
+
+    weights = []
+    loss_values = []
+    accuracy_values = []
+
+    for i, (batch_samples, batch_labels) in enumerate(test_loader):
+        # samples in the batch
+        batch_samples, batch_labels = batch_samples.to(config.device), batch_labels.to(config.device)
+
+        with torch.no_grad():
+            scores = data_rater(batch_samples).squeeze(-1)
+            weights.extend(scores.cpu().numpy())
+
+            loss_fn = nn.CrossEntropyLoss() if config.loss_type == 'cross_entropy' else nn.MSELoss()
+            loss_values.extend(loss_fn(model(batch_samples), batch_labels).cpu().numpy())
+            preds = model(batch_samples).argmax(dim=-1)
+            accuracy_values.extend((preds == batch_labels).cpu().numpy())
+
+    slope, intercept, r_value, p_value, std_err = stats.linregress(loss_values, weights)
+    return slope, intercept, r_value, p_value, std_err, loss_values, weights, accuracy_values
+
+
+def compute_rate_adv(config: DataRaterConfig, model, data_rater, test_loader):
+    """
+    Computes the regression coefficient of the data rater and loss on clean samples.
+    """
+
+    data_rater.eval()
+
+    weights = []
+    loss_values = []
+    accuracy_values = []
+
+    for i, (batch_samples, batch_labels) in enumerate(test_loader):
+        # samples in the batch
+        batch_samples, batch_labels = batch_samples.to(config.device), batch_labels.to(config.device)
+
+        with torch.no_grad():
+            scores = data_rater(batch_samples).squeeze(-1)
+            weights.extend(scores.cpu().numpy())
+
+            adv_samples = pgd_attack(
+                model, batch_samples, batch_labels,
+                loss_fn=nn.CrossEntropyLoss(),
+                eps=config.attack_eps,
+                step_size=config.attack_step_size,
+                steps=config.attack_steps,
+                random_start=True
+            )
+            loss_fn = nn.CrossEntropyLoss() if config.loss_type == 'cross_entropy' else nn.MSELoss()
+            loss_values.extend(loss_fn(model(adv_samples), batch_labels).cpu().numpy())
+
+            preds = model(adv_samples).argmax(dim=-1)
+            accuracy_values.extend((preds == batch_labels).cpu().numpy())   
+
+    slope, intercept, r_value, p_value, std_err = stats.linregress(loss_values, weights)
+    return slope, intercept, r_value, p_value, std_err, loss_values, weights, accuracy_values
+
+
 def run_meta_training(config: DataRaterConfig):
     """
     Initializes models and orchestrates the main meta-training loop.
@@ -302,7 +383,7 @@ def run_meta_training(config: DataRaterConfig):
                 for _ in range(config.num_inner_models)
             ]
 
-        outer_loss, train_iterator, val_iterator = outer_loop_step(
+        outer_loss, outer_loss_clean, train_iterator, val_iterator = outer_loop_step(
             config,
             logging_context,
             data_rater, outer_optimizer,
@@ -319,13 +400,12 @@ def run_meta_training(config: DataRaterConfig):
         # print(f"[η grad sum] {total:.3e}")
 
         if (meta_step + 1) % 10 == 0:
-            tqdm.write(f"  [Meta-Step {meta_step + 1}/{config.meta_steps}] Outer Loss: {outer_loss:.4f}")
+            tqdm.write(f"  [Meta-Step {meta_step + 1}/{config.meta_steps}] Outer Loss (Adv): {outer_loss:.4f}, Outer Loss (Clean): {outer_loss_clean:.4f}")
 
         if (meta_step) % 100 == 0:
             slope, intercept, r_value, p_value, std_err, corruption_levels, weights = compute_regression_coefficient(
                 config, dataset_handler, data_rater, test_loader
             )
-
             tag = f"regression_step_{meta_step + 1:06d}"
             save_regression_plot(corruption_levels, weights, slope, intercept, r_value, run_dir, tag)
 
@@ -333,6 +413,56 @@ def run_meta_training(config: DataRaterConfig):
                   f"Slope: {slope:.4f}, Intercept: {intercept:.4f}, "
                   f"R-value: {r_value:.4f}, P-value: {p_value:.4f}, Std-err: {std_err:.4f}")
 
+            # Rate vs clean loss plots
+            slope, intercept, r_value, p_value, std_err, loss_values, weights, accuracy_values = compute_rate(
+                config, inner_models[0], data_rater, test_loader
+            )
+            tag = f"regression_clean_step_{meta_step + 1:06d}"
+            save_regression_plot(loss_values, weights, slope, intercept, r_value, run_dir, tag)
+
+            # Rate vs adv loss plots
+            slope, intercept, r_value, p_value, std_err, loss_values, weights, accuracy_values_adv = compute_rate_adv(
+                config, inner_models[0], data_rater, test_loader
+            )
+            tag = f"regression_adv_step_{meta_step + 1:06d}"
+            save_regression_plot(loss_values, weights, slope, intercept, r_value, run_dir, tag)
+
+            # Plot accuracy vs clean loss
+            plt.figure(figsize=(10,6))
+            plt.plot(accuracy_values, label='Accuracy (Clean)', color='orange')
+            plt.xlabel('Meta Step')
+            plt.ylabel('Accuracy')
+            plt.title('Accuracy Over Meta Steps')
+            plt.legend()
+            plt.grid(True, linestyle=":")
+            acc_plot_path = os.path.join(run_dir, "plots", f"accuracy_curve_step_{meta_step + 1:06d}.png")
+            plt.savefig(acc_plot_path, bbox_inches="tight", dpi=150)
+            plt.close()
+
+            # Plot accuracy vs adv loss
+            plt.figure(figsize=(10,6))
+            plt.plot(accuracy_values_adv, label='Accuracy (Adv)', color='blue')
+            plt.xlabel('Meta Step')
+            plt.ylabel('Accuracy')
+            plt.title('Adversarial Accuracy Over Meta Steps')
+            plt.legend()
+            plt.grid(True, linestyle=":")
+            acc_adv_plot_path = os.path.join(run_dir, "plots", f"accuracy_adv_curve_step_{meta_step + 1:06d}.png")
+            plt.savefig(acc_adv_plot_path, bbox_inches="tight", dpi=150)
+            plt.close()
+
+            # plot outer loss curve so far
+            plt.figure(figsize=(10,6))
+            plt.plot(logging_context.outer_loss, label='Loss (Adv)', color='blue')
+            plt.plot(logging_context.outer_loss_clean, label='Loss (Clean)', color='orange')
+            plt.xlabel('Meta Step')
+            plt.ylabel('Loss')
+            plt.title('Loss Over Meta Steps')
+            plt.legend()
+            plt.grid(True, linestyle=":")
+            loss_plot_path = os.path.join(run_dir, "plots", f"loss_curve_step_{meta_step + 1:06d}.png")
+            plt.savefig(loss_plot_path, bbox_inches="tight", dpi=150)
+            plt.close()
 
     if config.save_data_rater_checkpoint:
         # Save the data rater model checkpoint
@@ -348,6 +478,12 @@ def run_meta_training(config: DataRaterConfig):
             for i, loss in enumerate(logging_context.outer_loss):
                 writer.writerow([i, loss])
 
+        outer_loss_clean_csv_path = os.path.join(run_dir, "outer_loss_clean.csv")
+        with open(outer_loss_clean_csv_path, mode="w", newline="") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(["meta_step", "outer_loss_clean"])
+            for i, loss in enumerate(logging_context.outer_loss_clean):
+                writer.writerow([i, loss])
 
     slope, intercept, r_value, p_value, std_err, _, _ = \
         compute_regression_coefficient(config, dataset_handler, data_rater, test_loader)
@@ -358,5 +494,5 @@ def run_meta_training(config: DataRaterConfig):
           f"P-value: {p_value:.4f}, "
           f"Std-err: {std_err:.4f}")
 
-    print("\n✅ Training complete!")
+    print("\nTraining complete!")
     return data_rater
