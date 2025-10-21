@@ -13,4 +13,8 @@ python data_rater_main.py \
   --num_inner_models=8 \
   --loss_type=cross_entropy \
   --save_data_rater_checkpoint=True \
-  --log=True
+  --log=True \
+  --attack_eps=8/255 \
+  --attack_steps=10 \
+  --attack_step_size=2/255 \
+  --model_update=False \

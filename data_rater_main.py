@@ -50,6 +50,9 @@ def parse_args():
                         help='Number of attack steps (default: 10)')
     parser.add_argument('--attack_step_size', type=float, default=2/255,
                         help='Attack step size (default: 2/255)')
+    # Inner update
+    parser.add_argument("--model-update", type=bool, default=False,
+                        help='Whether to update the model (default: False)')
     return parser.parse_args()
 
 
@@ -73,5 +76,9 @@ if __name__ == "__main__":
         loss_type=args.loss_type,
         save_data_rater_checkpoint=args.save_data_rater_checkpoint,
         log=args.log,
+        attack_eps=args.attack_eps,
+        attack_steps=args.attack_steps,
+        attack_step_size=args.attack_step_size,
+        model_update=args.model_update,
     )
     run_meta_training(config)

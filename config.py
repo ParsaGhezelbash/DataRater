@@ -20,7 +20,8 @@ class DataRaterConfig:
                  log=False,
                  attack_eps=8/255,
                  attack_steps=10,
-                 attack_step_size=2/255):
+                 attack_step_size=2/255,
+                 model_update=False):
         self.inner_model_class = inner_model_class
         self.data_rater_model_class = data_rater_model_class
         self.dataset_name = dataset_name
@@ -40,3 +41,4 @@ class DataRaterConfig:
         self.attack_eps = attack_eps
         self.attack_steps = attack_steps
         self.attack_step_size = attack_step_size
+        self.model_update = model_update

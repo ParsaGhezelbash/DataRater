@@ -179,9 +179,10 @@ def outer_loop_step(config: DataRaterConfig,
         outer_losses.append(outer_loss)
 
         # Inner model update
-        with torch.no_grad():
-            for name, p in model.named_parameters():
-                p.copy_(fast_params[name])
+        if config.model_update:
+            with torch.no_grad():
+                for name, p in model.named_parameters():
+                    p.copy_(fast_params[name])
 
     average_outer_loss = torch.mean(torch.stack(outer_losses))
 
