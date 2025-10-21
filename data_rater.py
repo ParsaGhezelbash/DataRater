@@ -355,7 +355,7 @@ def run_meta_training(config: DataRaterConfig):
     run_id = f"{config.dataset_name}_{timestamp}_{str(uuid.uuid4())[:8]}"
 
     print(f"Run ID: {run_id}")
-    logging_context = LoggingContext(run_id=run_id, outer_loss=[])
+    logging_context = LoggingContext(run_id=run_id, outer_loss=[], outer_loss_clean=[])
 
     run_dir = os.path.join("experiments", run_id)
     os.makedirs(run_dir, exist_ok=True)
