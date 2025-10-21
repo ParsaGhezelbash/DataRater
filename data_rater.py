@@ -285,7 +285,6 @@ def compute_rate(config: DataRaterConfig, model, data_rater, test_loader):
     """
     Computes the regression coefficient of the data rater and loss on clean samples.
     """
-
     data_rater.eval()
     model.eval()
 
@@ -301,13 +300,13 @@ def compute_rate(config: DataRaterConfig, model, data_rater, test_loader):
             scores = data_rater(batch_samples).squeeze(-1)
             weights.extend(scores.cpu().numpy())
 
-            loss_fn = nn.CrossEntropyLoss() if config.loss_type == 'cross_entropy' else nn.MSELoss()
-            losses = loss_fn(model(batch_samples), batch_labels).cpu().numpy()
-            print(losses.shape, scores.cpu().numpy().shape)
-            loss_values.extend(losses.flatten())
-            
-            preds = model(batch_samples).argmax(dim=-1)
-            accuracy_values.extend((preds == batch_labels).cpu().numpy().flatten())
+            loss_fn = nn.CrossEntropyLoss(reduction="none") if config.loss_type == 'cross_entropy' else nn.MSELoss(reduction="none")
+            preds = model(batch_samples)
+            losses = loss_fn(preds, batch_labels).cpu().numpy()
+            print(losses.shape.cpu().numpy(), scores.cpu().numpy().shape)
+            loss_values.extend(losses.cpu().numpy())
+            print((preds.argmax(dim=-1) == batch_labels).cpu().numpy().shape)
+            accuracy_values.extend((preds.argmax(dim=-1) == batch_labels).cpu().numpy())
 
     # slope, intercept, r_value, p_value, std_err = stats.linregress(loss_values, weights)
     return loss_values, weights, accuracy_values
@@ -317,7 +316,6 @@ def compute_rate_adv(config: DataRaterConfig, model, data_rater, test_loader):
     """
     Computes the regression coefficient of the data rater and loss on clean samples.
     """
-
     data_rater.eval()
     model.eval()
 
@@ -341,11 +339,10 @@ def compute_rate_adv(config: DataRaterConfig, model, data_rater, test_loader):
                 steps=config.attack_steps,
                 random_start=True
             )
-            loss_fn = nn.CrossEntropyLoss() if config.loss_type == 'cross_entropy' else nn.MSELoss()
-            loss_values.extend(loss_fn(model(adv_samples), batch_labels).cpu().numpy().flatten())
-
-            preds = model(adv_samples).argmax(dim=-1)
-            accuracy_values.extend((preds == batch_labels).cpu().numpy().flatten())   
+            loss_fn = nn.CrossEntropyLoss(reduction="none") if config.loss_type == 'cross_entropy' else nn.MSELoss(reduction="none")
+            preds = model(adv_samples)
+            loss_values.extend(loss_fn(preds, batch_labels).cpu().numpy())
+            accuracy_values.extend((preds.argmax(dim=-1) == batch_labels).cpu().numpy())   
 
     # slope, intercept, r_value, p_value, std_err = stats.linregress(loss_values, weights)
     return loss_values, weights, accuracy_values
