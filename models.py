@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torchvision.models import resnet18
 
 
 class ToyCNN(nn.Module):
@@ -23,7 +24,20 @@ class ToyCNN(nn.Module):
 
     def forward(self, x):
         return self.layers(x)
+    
 
+class ResNet18(nn.Module):
+    def __init__(self):
+        super(ResNet18, self).__init__()
+        self.model = resnet18(weights=None)    # or weights="IMAGENET1K_V1" for pretrained
+        self.model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1,
+                                      padding=1, bias=False)  # smaller kernel
+        self.model.maxpool = nn.Identity()      # remove downsampling
+        self.model.fc = nn.Linear(512, 10)      # CIFAR-10 = 10 classes
+
+    def forward(self, x):
+        return self.model(x)
+    
 
 class DataRater(nn.Module):
     """The outer model (meta-learner) that learns to rate data."""
@@ -46,6 +60,25 @@ class DataRater(nn.Module):
         features = self.layers(x)
         return self.head(features).squeeze(-1)
 
+
+class DataRaterResNet(nn.Module):
+    def __init__(self, in_channels=3, pretrained=False, temperature=1.0):
+        super().__init__()
+        resnet = resnet18(weights="IMAGENET1K_V1" if pretrained else None)
+        # Adapt for smaller images or 1‑channel input
+        if in_channels == 1:
+            resnet.conv1 = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        else:
+            resnet.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        resnet.maxpool = nn.Identity()  # Avoid excessive downsampling for 32×32 inputs
+        self.backbone = nn.Sequential(*(list(resnet.children())[:-1]))  # remove fc
+        self.head = nn.Linear(512, 1)
+        self.temperature = temperature
+
+    def forward(self, x):
+        f = self.backbone(x).flatten(1)
+        return self.head(f).squeeze(-1)
+    
 
 class ToyMLP(nn.Module):
     """Simple 2-layer MLP for regression tasks."""
@@ -80,8 +113,12 @@ class RegressionDataRater(nn.Module):
 def construct_model(model_class):
     if model_class == 'ToyCNN':
         return ToyCNN()
+    elif model_class == 'ResNet18':
+        return ResNet18()
     elif model_class == 'DataRater':
         return DataRater()
+    elif model_class == 'DataRaterResNet':
+        return DataRaterResNet()
     elif model_class == 'ToyMLP':
         return ToyMLP()
     elif model_class == 'RegressionDataRater':

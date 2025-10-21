@@ -1,0 +1,16 @@
+python data_rater_main.py \
+  --dataset_name=cifar10 \
+  --inner_model_name=ResNet18 \
+  --data_rater_model_name=DataRaterResNet \
+  --train_split_ratio=0.8 \
+  --batch_size=128 \
+  --inner_lr=1e-3 \
+  --outer_lr=3e-4 \
+  --meta_steps=1000 \
+  --inner_steps=2 \
+  --meta_refresh_steps=150 \
+  --grad_clip_norm=5.0 \
+  --num_inner_models=8 \
+  --loss_type=cross_entropy \
+  --save_data_rater_checkpoint=True \
+  --log=True
