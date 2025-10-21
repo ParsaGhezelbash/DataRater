@@ -32,7 +32,7 @@ class LoggingContext:
     outer_loss: list[float]
     outer_loss_clean: list[float]
 
-from torch.nn.utils.stateless import functional_call
+from torch.func import functional_call
 
 # Differentiable inner loop (manual SGD, no optim.step) ---
 def call_with_fast(model, fast_params, x):
@@ -300,9 +300,10 @@ def compute_rate(config: DataRaterConfig, model, data_rater, test_loader):
             weights.extend(scores.cpu().numpy())
 
             loss_fn = nn.CrossEntropyLoss() if config.loss_type == 'cross_entropy' else nn.MSELoss()
-            loss_values.extend(loss_fn(model(batch_samples), batch_labels).cpu().numpy())
+            loss_values.extend(loss_fn(model(batch_samples), batch_labels).cpu().numpy().flatten())
+            
             preds = model(batch_samples).argmax(dim=-1)
-            accuracy_values.extend((preds == batch_labels).cpu().numpy())
+            accuracy_values.extend((preds == batch_labels).cpu().numpy().flatten())
 
     slope, intercept, r_value, p_value, std_err = stats.linregress(loss_values, weights)
     return slope, intercept, r_value, p_value, std_err, loss_values, weights, accuracy_values
@@ -336,10 +337,10 @@ def compute_rate_adv(config: DataRaterConfig, model, data_rater, test_loader):
                 random_start=True
             )
             loss_fn = nn.CrossEntropyLoss() if config.loss_type == 'cross_entropy' else nn.MSELoss()
-            loss_values.extend(loss_fn(model(adv_samples), batch_labels).cpu().numpy())
+            loss_values.extend(loss_fn(model(adv_samples), batch_labels).cpu().numpy().flatten())
 
             preds = model(adv_samples).argmax(dim=-1)
-            accuracy_values.extend((preds == batch_labels).cpu().numpy())   
+            accuracy_values.extend((preds == batch_labels).cpu().numpy().flatten())   
 
     slope, intercept, r_value, p_value, std_err = stats.linregress(loss_values, weights)
     return slope, intercept, r_value, p_value, std_err, loss_values, weights, accuracy_values

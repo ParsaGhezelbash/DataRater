@@ -6,7 +6,7 @@ from torch.autograd import grad
 __all__ = ["fgsm_attack", "pgd_attack", "apgd_attack"]
 
 
-from torch.nn.utils.stateless import functional_call
+from torch.func import functional_call
 # Differentiable inner loop (manual SGD, no optim.step) ---
 def call_with_fast(model, fast_params, x):
     params = dict(model.named_parameters())
