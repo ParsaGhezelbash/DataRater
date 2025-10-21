@@ -5,6 +5,18 @@ from torch.autograd import grad
 
 __all__ = ["fgsm_attack", "pgd_attack", "apgd_attack"]
 
+
+from torch.nn.utils.stateless import functional_call
+# Differentiable inner loop (manual SGD, no optim.step) ---
+def call_with_fast(model, fast_params, x):
+    params = dict(model.named_parameters())
+    buffers = dict(model.named_buffers())
+    # replace only params with fast ones; keep real buffers
+    merged = {**buffers, **params}
+    merged.update(fast_params)
+    return functional_call(model, merged, (x,), strict=False)
+
+
 # FGSM: Fast Gradient Sign Method
 def fgsm_attack(model, inputs, labels, loss_fn, eps, params=None):
     r"""
@@ -18,7 +30,7 @@ def fgsm_attack(model, inputs, labels, loss_fn, eps, params=None):
         params (dict): optional fast params (for stateless functional_call)
     """
     x = inputs.clone().detach().requires_grad_(True)
-    logits = model(x) if params is None else model(x, params)
+    logits = model(x) if params is None else call_with_fast(model, params, x)
     loss = loss_fn(logits, labels)
     g = torch.autograd.grad(loss, x, only_inputs=True)[0]
     x_adv = x + eps * g.sign()
@@ -39,7 +51,7 @@ def pgd_attack(model, inputs, labels, loss_fn, eps, step_size, steps,
 
     for _ in range(steps):
         x.requires_grad_(True)
-        logits = model(x) if params is None else model(x, params)
+        logits = model(x) if params is None else call_with_fast(model, params, x)
         loss = loss_fn(logits, labels)
         g = torch.autograd.grad(loss, x, only_inputs=True)[0]
 
@@ -67,7 +79,7 @@ def apgd_attack(model, inputs, labels, loss_fn,
     # running momentum-style step sizes
     for t in range(steps):
         x.requires_grad_(True)
-        logits = model(x) if params is None else model(x, params)
+        logits = model(x) if params is None else call_with_fast(model, params, x)
         loss = loss_fn(logits, labels)
         g = torch.autograd.grad(loss, x, only_inputs=True)[0]
 
