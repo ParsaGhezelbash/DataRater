@@ -302,7 +302,7 @@ def compute_rate(config: DataRaterConfig, model, data_rater, test_loader):
 
             loss_fn = nn.CrossEntropyLoss(reduction="none") if config.loss_type == 'cross_entropy' else nn.MSELoss(reduction="none")
             preds = model(batch_samples)
-            losses = loss_fn(preds, batch_labels).cpu().numpy()
+            losses = loss_fn(preds, batch_labels)
             print(losses.cpu().numpy().shape, scores.cpu().numpy().shape)
             loss_values.extend(losses.cpu().numpy())
             print((preds.argmax(dim=-1) == batch_labels).cpu().numpy().shape)
