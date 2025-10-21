@@ -89,7 +89,7 @@ def apgd_attack(model, inputs, labels, loss_fn,
 
         # track best adversarial examples
         with torch.no_grad():
-            new_logits = model(x) if params is None else model(x, params)
+            new_logits = model(x) if params is None else call_with_fast(x, params)
             new_loss = loss_fn(new_logits, labels).detach()
             replace = new_loss > best_loss
             best_adv[replace] = x[replace]
