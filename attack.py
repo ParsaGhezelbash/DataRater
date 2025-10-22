@@ -29,7 +29,9 @@ def fgsm_attack(model, inputs, labels, loss_fn, eps, params=None):
         eps (float): perturbation strength in same normalization scale
         params (dict): optional fast params (for stateless functional_call)
     """
-    x = inputs.clone().detach().requires_grad_(True)
+    x = inputs.clone().detach()
+    
+    x = x.requires_grad_(True)
     logits = model(x) if params is None else call_with_fast(model, params, x)
     loss = loss_fn(logits, labels)
     g = torch.autograd.grad(loss, x, only_inputs=True)[0]

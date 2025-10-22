@@ -161,16 +161,19 @@ def outer_loop_step(config: DataRaterConfig,
         )
 
         # Attack on outer samples with inner model
-        model.eval()
-        adv_outer_samples = pgd_attack(
-            model, outer_samples, outer_labels,
-            loss_fn=nn.CrossEntropyLoss(),
-            eps=config.attack_eps,
-            step_size=config.attack_step_size,
-            steps=config.attack_steps,
-            random_start=True,
-            params=fast_params
-        )
+        if not config.attack:
+            model.eval()
+            adv_outer_samples = pgd_attack(
+                model, outer_samples, outer_labels,
+                loss_fn=nn.CrossEntropyLoss(),
+                eps=config.attack_eps,
+                step_size=config.attack_step_size,
+                steps=config.attack_steps,
+                random_start=True,
+                params=fast_params
+            )
+        else:
+            adv_outer_samples = outer_samples
 
         # Evaluate on outer batch using the fast params
         model.eval()
@@ -431,11 +434,14 @@ def run_meta_training(config: DataRaterConfig):
             save_regression_plot(loss_values, weights, run_dir, tag, "clean loss")
 
             # Rate vs adv loss plots
-            loss_values_adv, weights_adv, accuracy_values_adv = compute_rate_adv(
-                config, inner_models[0], data_rater, test_loader
-            )
-            tag = f"regression_adv_step_{meta_step + 1:06d}"
-            save_regression_plot(loss_values_adv, weights_adv, run_dir, tag, "adv loss")
+            if config.attack:
+                loss_values_adv, weights_adv, accuracy_values_adv = compute_rate_adv(
+                    config, inner_models[0], data_rater, test_loader
+                )
+                tag = f"regression_adv_step_{meta_step + 1:06d}"
+                save_regression_plot(loss_values_adv, weights_adv, run_dir, tag, "adv loss")
+            else:
+                loss_values_adv, weights_adv, accuracy_values_adv = loss_values, weights, accuracy_values
             
             logging_context.clean_accuracy.append(np.mean(accuracy_values))
             logging_context.adv_accuracy.append(np.mean(accuracy_values_adv))
@@ -446,7 +452,8 @@ def run_meta_training(config: DataRaterConfig):
     # Plot accuracy vs clean loss
     plt.figure(figsize=(10,6))
     plt.plot(logging_context.eval_step, logging_context.clean_accuracy, label='Accuracy (Clean)', color='orange')
-    plt.plot(logging_context.eval_step, logging_context.adv_accuracy, label='Accuracy (Adv)', color='blue')
+    if config.attack:
+        plt.plot(logging_context.eval_step, logging_context.adv_accuracy, label='Accuracy (Adv)', color='blue')
     plt.xlabel('Meta Step')
     plt.ylabel('Accuracy')
     plt.title('Test Accuracy Over Meta Steps')
@@ -458,9 +465,10 @@ def run_meta_training(config: DataRaterConfig):
 
     # plot outer loss curve so far
     plt.figure(figsize=(10,6))
-    plt.plot(logging_context.outer_loss, label='Val Loss (Adv)', color='blue')
+    if config.attack:
+        plt.plot(logging_context.outer_loss, label='Val Loss (Adv)', color='blue')
+        plt.plot(logging_context.eval_step, logging_context.outer_loss_test, label='Test Loss (Adv)', color='green', linestyle='--')
     plt.plot(logging_context.outer_loss_clean, label='Val Loss (Clean)', color='orange')
-    plt.plot(logging_context.eval_step, logging_context.outer_loss_test, label='Test Loss (Adv)', color='green', linestyle='--')
     plt.plot(logging_context.eval_step, logging_context.outer_loss_clean_test, label='Test Loss (Clean)', color='red', linestyle='--')
     plt.xlabel('Meta Step')
     plt.ylabel('Loss')

@@ -18,6 +18,7 @@ class DataRaterConfig:
                  loss_type="mse",
                  save_data_rater_checkpoint=False,
                  log=False,
+                 attack=False,
                  attack_eps=8/255,
                  attack_steps=10,
                  attack_eval_steps=20,
@@ -39,6 +40,7 @@ class DataRaterConfig:
         self.loss_type = loss_type
         self.save_data_rater_checkpoint = save_data_rater_checkpoint
         self.log = log
+        self.attack = attack
         self.attack_eps = attack_eps
         self.attack_steps = attack_steps
         self.attack_eval_steps = attack_eval_steps

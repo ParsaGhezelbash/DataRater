@@ -44,6 +44,8 @@ def parse_args():
     parser.add_argument('--log', type=bool, default=False,
                         help='Whether to log the training (default: False)')
     # Attack parameters
+    parser.add_argument('--attack', type=bool, default=False,
+                        help='Whether to use adversarial attacks (default: False)')
     parser.add_argument('--attack_eps', type=float, default=8/255,
                         help='Attack perturbation strength (default: 8/255)')
     parser.add_argument('--attack_steps', type=int, default=10,
@@ -78,6 +80,7 @@ if __name__ == "__main__":
         loss_type=args.loss_type,
         save_data_rater_checkpoint=args.save_data_rater_checkpoint,
         log=args.log,
+        attack=args.attack,
         attack_eps=args.attack_eps,
         attack_steps=args.attack_steps,
         attack_eval_steps=args.attack_eval_steps,
