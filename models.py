@@ -128,6 +128,8 @@ def construct_model(model_class):
         return ToyCNN()
     elif model_class == 'ResNet18':
         return ResNet18()
+    elif model_class == 'ResNetMnist':
+        return ResNetMnist()
     elif model_class == 'DataRater':
         return DataRater()
     elif model_class == 'DataRaterResNet':
