@@ -43,6 +43,8 @@ def parse_args():
                         help='Whether to save the data rater model checkpoint (default: False)')
     parser.add_argument('--log', type=bool, default=False,
                         help='Whether to log the training (default: False)')
+    parser.add_argument('--eval_frequency', type=int, default=100,
+                        help='Frequency of evaluation during training (default: 100)')
     # Attack parameters
     parser.add_argument('--attack', type=bool, default=False,
                         help='Whether to use adversarial attacks (default: False)')
@@ -79,6 +81,7 @@ if __name__ == "__main__":
         device=args.device,
         loss_type=args.loss_type,
         save_data_rater_checkpoint=args.save_data_rater_checkpoint,
+        eval_frequency=args.eval_frequency,
         log=args.log,
         attack=args.attack,
         attack_eps=args.attack_eps,

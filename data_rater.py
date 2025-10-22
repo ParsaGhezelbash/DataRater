@@ -161,7 +161,7 @@ def outer_loop_step(config: DataRaterConfig,
         )
 
         # Attack on outer samples with inner model
-        if not config.attack:
+        if config.attack:
             model.eval()
             adv_outer_samples = pgd_attack(
                 model, outer_samples, outer_labels,
@@ -188,15 +188,16 @@ def outer_loop_step(config: DataRaterConfig,
 
         outer_losses.append(outer_loss)
 
-        outer_logits_clean = call_with_fast(model, fast_params, outer_samples)
-        if config.loss_type == 'mse':
-            outer_loss_clean = nn.functional.mse_loss(outer_logits_clean, outer_labels)
-        elif config.loss_type == 'cross_entropy':
-            outer_loss_clean = nn.functional.cross_entropy(outer_logits_clean, outer_labels)
-        else:
-            raise ValueError(f"Loss type {config.loss_type} not supported")
+        if config.attack:
+            outer_logits_clean = call_with_fast(model, fast_params, outer_samples)
+            if config.loss_type == 'mse':
+                outer_loss_clean = nn.functional.mse_loss(outer_logits_clean, outer_labels)
+            elif config.loss_type == 'cross_entropy':
+                outer_loss_clean = nn.functional.cross_entropy(outer_logits_clean, outer_labels)
+            else:
+                raise ValueError(f"Loss type {config.loss_type} not supported")
 
-        outer_losses_clean.append(outer_loss_clean)
+            outer_losses_clean.append(outer_loss_clean)
 
         # Inner model update
         if config.model_update:
@@ -205,7 +206,10 @@ def outer_loop_step(config: DataRaterConfig,
                     p.copy_(fast_params[name])
 
     average_outer_loss = torch.mean(torch.stack(outer_losses))
-    average_outer_loss_clean = torch.mean(torch.stack(outer_losses_clean))
+    if config.attack:
+        average_outer_loss_clean = torch.mean(torch.stack(outer_losses_clean))
+    else:
+        average_outer_loss_clean = average_outer_loss
 
     # Meta-step on η
     outer_optimizer.zero_grad()
@@ -413,9 +417,13 @@ def run_meta_training(config: DataRaterConfig):
         # print(f"[η grad sum] {total:.3e}")
 
         if (meta_step + 1) % 10 == 0:
-            tqdm.write(f"  [Meta-Step {meta_step + 1}/{config.meta_steps}] Outer Loss (Adv): {outer_loss:.4f}, Outer Loss (Clean): {outer_loss_clean:.4f}")
+            if config.attack:
+                tqdm.write(f"  [Meta-Step {meta_step + 1}/{config.meta_steps}] Outer Loss (Adv): {outer_loss:.4f}, Outer Loss (Clean): {outer_loss_clean:.4f}")
+            else:
+                tqdm.write(f"  [Meta-Step {meta_step + 1}/{config.meta_steps}] Outer Loss: {outer_loss:.4f}")
+                
 
-        if (meta_step) % 100 == 0:
+        if (meta_step) % config.eval_frequency == 0:
             slope, intercept, r_value, p_value, std_err, corruption_levels, weights = compute_regression_coefficient(
                 config, dataset_handler, data_rater, test_loader
             )
