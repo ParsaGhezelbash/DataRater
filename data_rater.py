@@ -440,6 +440,7 @@ def run_meta_training(config: DataRaterConfig):
             # Plot accuracy vs clean loss
             plt.figure(figsize=(10,6))
             plt.plot(logging_context.eval_step, logging_context.clean_accuracy, label='Accuracy (Clean)', color='orange')
+            plt.plot(logging_context.eval_step, logging_context.adv_accuracy, label='Accuracy (Adv)', color='blue')
             plt.xlabel('Meta Step')
             plt.ylabel('Accuracy')
             plt.title('Accuracy Over Meta Steps')
@@ -447,18 +448,6 @@ def run_meta_training(config: DataRaterConfig):
             plt.grid(True, linestyle=":")
             acc_plot_path = os.path.join(run_dir, "plots", f"accuracy_curve_step_{meta_step + 1:06d}.png")
             plt.savefig(acc_plot_path, bbox_inches="tight", dpi=150)
-            plt.close()
-
-            # Plot accuracy vs adv loss
-            plt.figure(figsize=(10,6))
-            plt.plot(logging_context.eval_step, logging_context.adv_accuracy, label='Accuracy (Adv)', color='blue')
-            plt.xlabel('Meta Step')
-            plt.ylabel('Accuracy')
-            plt.title('Adversarial Accuracy Over Meta Steps')
-            plt.legend()
-            plt.grid(True, linestyle=":")
-            acc_adv_plot_path = os.path.join(run_dir, "plots", f"accuracy_adv_curve_step_{meta_step + 1:06d}.png")
-            plt.savefig(acc_adv_plot_path, bbox_inches="tight", dpi=150)
             plt.close()
 
             # plot outer loss curve so far
