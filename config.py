@@ -48,3 +48,5 @@ class DataRaterConfig:
         self.attack_eval_steps = attack_eval_steps
         self.attack_step_size = attack_step_size
         self.model_update = model_update
+
+        print(f"Configuration: {self.__dict__}")
