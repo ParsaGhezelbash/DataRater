@@ -30,7 +30,9 @@ from datasets import get_dataset_loaders
 class LoggingContext:
     run_id: str
     outer_loss: list[float]
+    outer_loss_test: list[float]
     outer_loss_clean: list[float]
+    outer_loss_clean_test: list[float]
     clean_accuracy: list[float]
     adv_accuracy: list[float]
     eval_step: list[int]
@@ -361,7 +363,8 @@ def run_meta_training(config: DataRaterConfig):
 
     print(f"Run ID: {run_id}")
     logging_context = LoggingContext(run_id=run_id,
-                                     outer_loss=[], outer_loss_clean=[], clean_accuracy=[], adv_accuracy=[], eval_step=[])
+                                     outer_loss=[], outer_loss_clean=[], clean_accuracy=[], adv_accuracy=[], eval_step=[],
+                                     outer_loss_test=[], outer_loss_clean_test=[])
 
     run_dir = os.path.join("experiments", run_id)
     os.makedirs(run_dir, exist_ok=True)
@@ -425,7 +428,6 @@ def run_meta_training(config: DataRaterConfig):
             )
             tag = f"regression_clean_step_{meta_step + 1:06d}"
             save_regression_plot(loss_values, weights, run_dir, tag, "clean loss")
-            logging_context.clean_accuracy.append(np.mean(accuracy_values))
 
             # Rate vs adv loss plots
             loss_values_adv, weights_adv, accuracy_values_adv = compute_rate_adv(
@@ -433,36 +435,41 @@ def run_meta_training(config: DataRaterConfig):
             )
             tag = f"regression_adv_step_{meta_step + 1:06d}"
             save_regression_plot(loss_values_adv, weights_adv, run_dir, tag, "adv loss")
-            logging_context.adv_accuracy.append(np.mean(accuracy_values_adv))
             
+            logging_context.clean_accuracy.append(np.mean(accuracy_values))
+            logging_context.adv_accuracy.append(np.mean(accuracy_values_adv))
+            logging_context.outer_loss_test.append(outer_loss)
+            logging_context.outer_loss_clean_test.append(outer_loss_clean)
             logging_context.eval_step.append(meta_step)
 
-            # Plot accuracy vs clean loss
-            plt.figure(figsize=(10,6))
-            plt.plot(logging_context.eval_step, logging_context.clean_accuracy, label='Accuracy (Clean)', color='orange')
-            plt.plot(logging_context.eval_step, logging_context.adv_accuracy, label='Accuracy (Adv)', color='blue')
-            plt.xlabel('Meta Step')
-            plt.ylabel('Accuracy')
-            plt.title('Accuracy Over Meta Steps')
-            plt.legend()
-            plt.grid(True, linestyle=":")
-            acc_plot_path = os.path.join(run_dir, "plots", f"accuracy_curve_step_{meta_step + 1:06d}.png")
-            plt.savefig(acc_plot_path, bbox_inches="tight", dpi=150)
-            plt.close()
+    # Plot accuracy vs clean loss
+    plt.figure(figsize=(10,6))
+    plt.plot(logging_context.eval_step, logging_context.clean_accuracy, label='Accuracy (Clean)', color='orange')
+    plt.plot(logging_context.eval_step, logging_context.adv_accuracy, label='Accuracy (Adv)', color='blue')
+    plt.xlabel('Meta Step')
+    plt.ylabel('Accuracy')
+    plt.title('Test Accuracy Over Meta Steps')
+    plt.legend()
+    plt.grid(True, linestyle=":")
+    acc_plot_path = os.path.join(run_dir, "plots", f"accuracy_curve.png")
+    plt.savefig(acc_plot_path, bbox_inches="tight", dpi=150)
+    plt.close()
 
-            # plot outer loss curve so far
-            plt.figure(figsize=(10,6))
-            plt.plot(logging_context.outer_loss, label='Loss (Adv)', color='blue')
-            plt.plot(logging_context.outer_loss_clean, label='Loss (Clean)', color='orange')
-            plt.xlabel('Meta Step')
-            plt.ylabel('Loss')
-            plt.title('Loss Over Meta Steps')
-            plt.legend()
-            plt.grid(True, linestyle=":")
-            loss_plot_path = os.path.join(run_dir, "plots", f"loss_curve_step_{meta_step + 1:06d}.png")
-            plt.savefig(loss_plot_path, bbox_inches="tight", dpi=150)
-            plt.close()
-
+    # plot outer loss curve so far
+    plt.figure(figsize=(10,6))
+    plt.plot(logging_context.outer_loss, label='Val Loss (Adv)', color='blue')
+    plt.plot(logging_context.outer_loss_clean, label='Val Loss (Clean)', color='orange')
+    plt.plot(logging_context.outer_loss_test, label='Test Loss (Adv)', color='green', linestyle='--')
+    plt.plot(logging_context.outer_loss_clean_test, label='Test Loss (Clean)', color='red', linestyle='--')
+    plt.xlabel('Meta Step')
+    plt.ylabel('Loss')
+    plt.title('Loss Over Meta Steps')
+    plt.legend()
+    plt.grid(True, linestyle=":")
+    loss_plot_path = os.path.join(run_dir, "plots", f"loss_curve.png")
+    plt.savefig(loss_plot_path, bbox_inches="tight", dpi=150)
+    plt.close()
+    
     if config.save_data_rater_checkpoint:
         # Save the data rater model checkpoint
         checkpoint_path = os.path.join(run_dir, "data_rater.pt")
