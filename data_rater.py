@@ -338,7 +338,7 @@ def compute_rate_adv(config: DataRaterConfig, model, data_rater, test_loader):
             model, batch_samples, batch_labels,
             loss_fn=nn.CrossEntropyLoss(),
             eps=config.attack_eps,
-            step_size=config.attack_step_size,
+            step_size=config.attack_eval_steps,
             steps=config.attack_steps,
             random_start=True
         )

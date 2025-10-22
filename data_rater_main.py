@@ -48,6 +48,8 @@ def parse_args():
                         help='Attack perturbation strength (default: 8/255)')
     parser.add_argument('--attack_steps', type=int, default=10,
                         help='Number of attack steps (default: 10)')
+    parser.add_argument('--attack_eval_steps', type=int, default=20,
+                        help='Number of attack evaluation steps (default: 20)')
     parser.add_argument('--attack_step_size', type=float, default=2/255,
                         help='Attack step size (default: 2/255)')
     # Inner update
@@ -78,6 +80,7 @@ if __name__ == "__main__":
         log=args.log,
         attack_eps=args.attack_eps,
         attack_steps=args.attack_steps,
+        attack_eval_steps=args.attack_eval_steps,
         attack_step_size=args.attack_step_size,
         model_update=args.model_update,
     )
