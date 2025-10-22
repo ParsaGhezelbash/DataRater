@@ -243,6 +243,7 @@ def save_regression_plot(corruption_levels, weights, out_dir, tag, x_label, slop
 
     out_path = os.path.join(out_dir, "plots", f"{tag}.png")  # <-- unique filename via tag
     plt.savefig(out_path, bbox_inches="tight", dpi=150)
+    print(f"saved {tag} plot to {out_path}")
     plt.close()
 
 
