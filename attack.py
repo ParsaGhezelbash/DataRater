@@ -45,6 +45,7 @@ def pgd_attack(model, inputs, labels, loss_fn, eps, step_size, steps,
     r"""
     Multi-step adversarial attack (L∞ PGD).
     """
+    print("Using PGD Attack")
     x = inputs.clone().detach()
 
     if random_start:
