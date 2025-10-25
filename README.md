@@ -1,4 +1,4 @@
-# DataRater: Meta-Learned Dataset Curation
+# DataRater for Robustness: Meta-Learned Dataset Curation to improve Model Robustness
 
 **Implementation of the DataRater (Calian et. al.) paper: https://arxiv.org/abs/2505.17895**
 
@@ -172,6 +172,13 @@ config = DataRaterConfig(
     loss_type=args.loss_type,
     save_data_rater_checkpoint=args.save_data_rater_checkpoint,
     log=args.log,
+    eval_frequency=args.eval_frequency,
+    attack=args.attack,
+    attack_eps=args.attack_eps,
+    attack_steps=args.attack_steps,
+    attack_eval_steps=args.attack_eval_steps,
+    attack_step_size=args.attack_step_size,
+    model_update=args.model_update,
 )
 run_meta_training(config)
 ```
@@ -194,6 +201,13 @@ run_meta_training(config)
 - `loss_type`: Loss function to use for training (e.g., "mse" or "cross_entropy").
 - `save_data_rater_checkpoint`: Whether to save the trained DataRater model checkpoint.
 - `log`: Whether to log training metrics and save logs to disk.
+- `eval_frequency`: Frequency of evaluation during training (in meta-steps).
+- `attack`: Whether to use adversarial attacks (default: False).
+- `attack_eps`: Attack perturbation strength (default: 8/255).
+- `attack_steps`: Number of attack steps (default: 10).
+- `attack_eval_steps`: Number of attack evaluation steps (default: 20).
+- `attack_step_size`: Attack step size (default: 2/255).
+- `model_update`: Whether to update the model (default: False).
 
 ## Architecture Details
 
@@ -223,10 +237,15 @@ python data_rater_main.py \
   --num_inner_models=8 \
   --loss_type=cross_entropy \
   --save_data_rater_checkpoint=True \
-  --log=True
+  --log=True \
+  --eval_frequency=100 \
+  --attack=True \
+  --attack_eps=0.031 \
+  --attack_steps=10 \
+  --attack_eval_steps=20 \
+  --attack_step_size=0.007 \
+  --model_update=True
 ```
-
-![MNIST Run: DataRater learns to weight examples in proportion to their corruption levels](https://github.com/rishabhranawat/DataRater/blob/main/mnist_20250920_1037_a11efc10/plots/combined_grid.png)
 
 You can find the saved DataRater model checkpoint (`data_rater.pt`) in the `mnist_20250920_1037_a11efc10/`. The checkpoint and associated data are useful for further analysis, reproducibility, or resuming training.
 
@@ -245,8 +264,6 @@ Each experiment was repeated **5 times with different seeds** to account for ran
 | Baseline     | **0.9708 ± 0.0030** |
 | Filtered     | **0.9732 ± 0.0036** |
 | Random-Drop  | **0.9699 ± 0.0033** |
-
-**Takeaway:** DataRater-based filtering consistently matched or slightly outperformed baseline and random-drop, while training on fewer (higher-value) samples.
 
 
 ## Contributing
