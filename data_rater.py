@@ -491,7 +491,7 @@ def run_meta_training(config: DataRaterConfig):
         # Save the data rater model checkpoint
         checkpoint_path = os.path.join(run_dir, "data_rater.pt")
         for i, model in enumerate(inner_models, start=0):  # use start=1 if you want 1-based
-            torch.save(model.state_dict(), os.path.join(run_dir, f"inner_model{i}.pt"))k
+            torch.save(model.state_dict(), os.path.join(run_dir, f"inner_model{i}.pt"))
         torch.save(data_rater.state_dict(), checkpoint_path)
 
     if config.log:
