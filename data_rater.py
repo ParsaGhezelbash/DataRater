@@ -152,6 +152,11 @@ def outer_loop_step(config: DataRaterConfig,
     outer_samples = outer_samples.to(config.device)
     outer_labels = outer_labels.to(config.device)
 
+    # outer_optimizer.zero_grad()
+
+    total_outer_loss = 0.0
+    total_outer_loss_clean = 0.0
+
     # Run inner unroll for each model -> fast params, then eval outer loss
     outer_losses = []
     outer_losses_clean = []
@@ -186,7 +191,9 @@ def outer_loop_step(config: DataRaterConfig,
         else:
             raise ValueError(f"Loss type {config.loss_type} not supported")
 
-        outer_losses.append(outer_loss)
+        # outer_losses.append(outer_loss)
+        total_outer_loss += outer_loss.item()
+        (outer_loss / len(inner_models)).backward()
 
         if config.attack:
             outer_logits_clean = call_with_fast(model, fast_params, outer_samples)
@@ -196,31 +203,46 @@ def outer_loop_step(config: DataRaterConfig,
                 outer_loss_clean = nn.functional.cross_entropy(outer_logits_clean, outer_labels)
             else:
                 raise ValueError(f"Loss type {config.loss_type} not supported")
+            total_outer_loss_clean += outer_loss_clean.item()
+        else:
+            total_outer_loss_clean += outer_loss.item()
 
-            outer_losses_clean.append(outer_loss_clean)
+            # outer_losses_clean.append(outer_loss_clean)
 
         # Inner model update
         if config.model_update:
             with torch.no_grad():
                 for name, p in model.named_parameters():
                     p.copy_(fast_params[name])
-
-    average_outer_loss = torch.mean(torch.stack(outer_losses))
-    if config.attack:
-        average_outer_loss_clean = torch.mean(torch.stack(outer_losses_clean))
-    else:
-        average_outer_loss_clean = average_outer_loss
-
-    # Meta-step on η
-    outer_optimizer.zero_grad()
-    for i, outer_loss in enumerate(outer_losses):
-        (outer_loss / len(outer_losses)).backward()  # average grads
+    # After iterating through all models and accumulating gradients...
+    # Perform the optimizer step
     torch.nn.utils.clip_grad_norm_(data_rater.parameters(), config.grad_clip_norm)
     outer_optimizer.step()
 
-    logging_context.outer_loss.append(average_outer_loss.item())
-    logging_context.outer_loss_clean.append(average_outer_loss_clean.item())
-    return average_outer_loss.item(), average_outer_loss_clean.item(), train_iterator, val_iterator
+    # Calculate average losses for logging
+    average_outer_loss = total_outer_loss / len(inner_models)
+    average_outer_loss_clean = total_outer_loss_clean / len(inner_models)
+
+    logging_context.outer_loss.append(average_outer_loss)
+    logging_context.outer_loss_clean.append(average_outer_loss_clean)
+    return average_outer_loss, average_outer_loss_clean, train_iterator, val_iterator
+
+    # average_outer_loss = torch.mean(torch.stack(outer_losses))
+    # if config.attack:
+    #     average_outer_loss_clean = torch.mean(torch.stack(outer_losses_clean))
+    # else:
+    #     average_outer_loss_clean = average_outer_loss
+
+    # # Meta-step on η
+    # outer_optimizer.zero_grad()
+    # for i, outer_loss in enumerate(outer_losses):
+    #     (outer_loss / len(outer_losses)).backward()  # average grads
+    # torch.nn.utils.clip_grad_norm_(data_rater.parameters(), config.grad_clip_norm)
+    # outer_optimizer.step()
+
+    # logging_context.outer_loss.append(average_outer_loss.item())
+    # logging_context.outer_loss_clean.append(average_outer_loss_clean.item())
+    # return average_outer_loss.item(), average_outer_loss_clean.item(), train_iterator, val_iterator
 
 
 def save_regression_plot(corruption_levels, weights, out_dir, tag, x_label, slope=None, intercept=None, r_value=None):
