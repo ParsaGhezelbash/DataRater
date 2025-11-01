@@ -92,7 +92,7 @@ class DataRaterResNet(nn.Module):
         f = self.backbone(x).flatten(1)
         return self.head(f).squeeze(-1)
     
-    
+
 class DataRaterResNetMnist(nn.Module):
     def __init__(self, in_channels=1, pretrained=False, temperature=1.0):
         super().__init__()
@@ -153,6 +153,8 @@ def construct_model(model_class):
         return DataRater()
     elif model_class == 'DataRaterResNet':
         return DataRaterResNet()
+    elif model_class == 'DataRaterResNetMnist':
+        return DataRaterResNetMnist()
     elif model_class == 'ToyMLP':
         return ToyMLP()
     elif model_class == 'RegressionDataRater':
