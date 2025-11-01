@@ -38,7 +38,7 @@ def corrupt(samples: torch.Tensor, corruption_probability: float=0.1, corruption
             random_pixels = torch.rand(num_pixels_to_corrupt, device=samples.device) * 2 - 1
             corrupted_images[i, 0, row_indices, col_indices] = random_pixels
 
-        return corrupted_images
+    return corrupted_images
     
     
 def identity(samples: torch.Tensor) -> torch.Tensor:
