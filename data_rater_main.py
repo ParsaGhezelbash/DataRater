@@ -62,7 +62,7 @@ def parse_args():
     
     parser.add_argument('--inner_label_transform', type=str, default='identity', 
                         help='Transformation to apply to inner model labels (default: identity)')
-    parser.add_argument('--transform_epsilon', type=float, default=0.1,
+    parser.add_argument('--transform_epsilon', type=float, default=3/255,
                         help='Epsilon value for transformations that require it (default: 0.1)')
     return parser.parse_args()
 

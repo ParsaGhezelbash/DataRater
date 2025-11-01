@@ -14,6 +14,7 @@ def corrupt(samples: torch.Tensor, corruption_probability: float=0.1, corruption
     Returns:
         torch.Tensor: The corrupted tensor.
     """
+    corrupted_images = samples
     if torch.rand(1).item() < corruption_probability:
         corruption_fraction = torch.FloatTensor(1).uniform_(
             corruption_fraction_range[0],
