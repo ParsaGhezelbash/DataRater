@@ -152,14 +152,14 @@ def outer_loop_step(config: DataRaterConfig,
     outer_samples = outer_samples.to(config.device)
     outer_labels = outer_labels.to(config.device)
 
-    # outer_optimizer.zero_grad()
+    outer_optimizer.zero_grad()
 
     total_outer_loss = 0.0
     total_outer_loss_clean = 0.0
 
     # Run inner unroll for each model -> fast params, then eval outer loss
-    outer_losses = []
-    outer_losses_clean = []
+    # outer_losses = []
+    # outer_losses_clean = []
     for model in inner_models:
         fast_params, train_iterator = inner_unroll_differentiable(
             config, model, data_rater, train_iterator, train_loader, config.inner_steps
