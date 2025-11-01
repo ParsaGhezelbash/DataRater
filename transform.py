@@ -14,31 +14,44 @@ def corrupt(samples: torch.Tensor, corruption_probability: float=0.1, corruption
     Returns:
         torch.Tensor: The corrupted tensor.
     """
-    corrupted_images = samples
-    if torch.rand(1).item() < corruption_probability:
-        corruption_fraction = torch.FloatTensor(1).uniform_(
-            corruption_fraction_range[0],
-            corruption_fraction_range[1]
-        ).item()
+    if corruption_probability == 0.0 or not (0 < corruption_probability <= 1.0):
+        return samples
 
-        if corruption_fraction == 0.0:
-            return samples
+    if not samples.numel():
+        return samples
 
-        corrupted_images = samples.clone()
-        # Ensure it works for single images (B, C, H, W) or batches
-        if len(samples.shape) == 3:
-            images = images.unsqueeze(0)
+    corrupted_samples = samples.clone()
 
-        batch_size, _, height, width = samples.shape
-        num_pixels_to_corrupt = int(corruption_fraction * (height * width))
+    was_single_image = False
+    if len(corrupted_samples.shape) == 3:
+        was_single_image = True
+        corrupted_samples = corrupted_samples.unsqueeze(0)
 
-        for i in range(batch_size):
-            indices = torch.randperm(height * width, device=samples.device)[:num_pixels_to_corrupt]
+    batch_size, channels, height, width = corrupted_samples.shape
+    total_pixels_per_image = height * width
+
+    for i in range(batch_size):
+        if torch.rand(1).item() < corruption_probability:
+            corruption_fraction = torch.FloatTensor(1).uniform_(
+                corruption_fraction_range[0],
+                corruption_fraction_range[1]
+            ).item()
+
+            num_pixels_to_corrupt = int(corruption_fraction * total_pixels_per_image)
+
+            if num_pixels_to_corrupt == 0:
+                continue
+
+            indices = torch.randperm(total_pixels_per_image, device=samples.device)[:num_pixels_to_corrupt]
             row_indices, col_indices = indices // width, indices % width
-            random_pixels = torch.rand(num_pixels_to_corrupt, device=samples.device) * 2 - 1
-            corrupted_images[i, 0, row_indices, col_indices] = random_pixels
 
-    return corrupted_images
+            random_noise = torch.rand(num_pixels_to_corrupt, device=samples.device) * 2 - 1
+            corrupted_samples[i, :, row_indices, col_indices] = random_noise
+
+    if was_single_image:
+        corrupted_samples = corrupted_samples.squeeze(0)
+
+    return corrupted_samples
     
     
 def identity(samples: torch.Tensor) -> torch.Tensor:
