@@ -24,7 +24,9 @@ class DataRaterConfig:
                  attack_steps=10,
                  attack_eval_steps=20,
                  attack_step_size=2/255,
-                 model_update=False):
+                 model_update=False,
+                 inner_label_transform='identity',
+                 transform_epsilon=0.1):
         self.inner_model_class = inner_model_class
         self.data_rater_model_class = data_rater_model_class
         self.dataset_name = dataset_name
@@ -48,5 +50,7 @@ class DataRaterConfig:
         self.attack_eval_steps = attack_eval_steps
         self.attack_step_size = attack_step_size
         self.model_update = model_update
+        self.inner_label_transform = inner_label_transform
+        self.transform_epsilon = transform_epsilon
 
         print(f"Configuration: {self.__dict__}")

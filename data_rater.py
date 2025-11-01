@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 from models import construct_model
 from config import DataRaterConfig
 from datasets import get_dataset_loaders
+from transform import corrupt, identity, noise, fgsm
 
 @dataclass
 class LoggingContext:
@@ -79,6 +80,17 @@ def inner_unroll_differentiable(
 
         inner_samples = inner_samples.to(config.device)
         inner_labels = inner_labels.to(config.device)
+
+        if config.inner_label_transform == 'fgsm':
+            inner_samples = fgsm(inner_samples, inner_labels, inner_model, nn.CrossEntropyLoss(), config.transform_epsilon)
+        elif config.inner_label_transform == 'noise':
+            inner_samples = noise(inner_samples)
+        elif config.inner_label_transform == 'corrupt':
+            inner_samples = corrupt(inner_samples)
+        elif config.inner_label_transform == 'identity':
+            inner_samples = identity(inner_samples)
+        else:
+            raise ValueError(f"Unknown inner_label_transform: {config.inner_label_transform}")
 
         # Ratings *with* grad, softmax across batch (dim=0). Optional temperature.
         ratings = data_rater(inner_samples)                         # [B] or [B,1]

@@ -131,11 +131,12 @@ class MNISTDataRaterDataset(DataRaterDataset):
         train_subset, val_subset = random_split(full_train_dataset, [num_train, num_val])
 
         # ** Wrap the training subset to apply corruption on-the-fly **
-        corrupted_train_dataset = CorruptedSubset(
-            original_subset=train_subset,
-            corruption_fn=self.corrupt_samples,
-            config=train_corruption_config
-        )
+        # corrupted_train_dataset = CorruptedSubset(
+        #     original_subset=train_subset,
+        #     corruption_fn=self.corrupt_samples,
+        #     config=train_corruption_config
+        # )
+        corrupted_train_dataset = train_subset
 
         print(f"Train set: {len(corrupted_train_dataset)} images (probabilistically corrupted)")
         print(f"Validation set: {len(val_subset)} images (clean)")
@@ -196,11 +197,12 @@ class CIFAR10DataRaterDataset(DataRaterDataset):
         train_subset, val_subset = random_split(full_train_dataset, [num_train, num_val])
 
         # ** Wrap the training subset to apply corruption on-the-fly **
-        corrupted_train_dataset = CorruptedSubset(
-            original_subset=train_subset,
-            corruption_fn=self.corrupt_samples,
-            config=train_corruption_config
-        )
+        # corrupted_train_dataset = CorruptedSubset(
+        #     original_subset=train_subset,
+        #     corruption_fn=self.corrupt_samples,
+        #     config=train_corruption_config
+        # )
+        corrupted_train_dataset = train_subset
 
         print(f"Train set: {len(corrupted_train_dataset)} images (probabilistically corrupted)")
         print(f"Validation set: {len(val_subset)} images (clean)")

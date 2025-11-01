@@ -59,6 +59,11 @@ def parse_args():
     # Inner update
     parser.add_argument("--model-update", type=bool, default=False,
                         help='Whether to update the model (default: False)')
+    
+    parser.add_argument('--inner_label_transform', type=str, default='identity', 
+                        help='Transformation to apply to inner model labels (default: identity)')
+    parser.add_argument('--transform_epsilon', type=float, default=0.1,
+                        help='Epsilon value for transformations that require it (default: 0.1)')
     return parser.parse_args()
 
 
@@ -89,5 +94,7 @@ if __name__ == "__main__":
         attack_eval_steps=args.attack_eval_steps,
         attack_step_size=args.attack_step_size,
         model_update=args.model_update,
+        inner_label_transform=args.inner_label_transform,
+        transform_epsilon=args.transform_epsilon
     )
     run_meta_training(config)
