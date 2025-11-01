@@ -92,6 +92,25 @@ class DataRaterResNet(nn.Module):
         f = self.backbone(x).flatten(1)
         return self.head(f).squeeze(-1)
     
+    
+class DataRaterResNetMnist(nn.Module):
+    def __init__(self, in_channels=1, pretrained=False, temperature=1.0):
+        super().__init__()
+        resnet = resnet18(weights="IMAGENET1K_V1" if pretrained else None)
+        # Adapt for smaller images or 1‑channel input
+        if in_channels == 1:
+            resnet.conv1 = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        else:
+            resnet.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        resnet.maxpool = nn.Identity()  # Avoid excessive downsampling for 32×32 inputs
+        self.backbone = nn.Sequential(*(list(resnet.children())[:-1]))  # remove fc
+        self.head = nn.Linear(512, 1)
+        self.temperature = temperature
+
+    def forward(self, x):
+        f = self.backbone(x).flatten(1)
+        return self.head(f).squeeze(-1)
+    
 
 class ToyMLP(nn.Module):
     """Simple 2-layer MLP for regression tasks."""
