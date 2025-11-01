@@ -26,7 +26,7 @@ class DataRaterConfig:
                  attack_step_size=2/255,
                  model_update=False,
                  inner_label_transform='identity',
-                 transform_epsilon=0.1):
+                 transform_epsilon=3/255):
         self.inner_model_class = inner_model_class
         self.data_rater_model_class = data_rater_model_class
         self.dataset_name = dataset_name

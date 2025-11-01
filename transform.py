@@ -68,7 +68,7 @@ def noise(samples: torch.Tensor, noise_level: float=0.1) -> torch.Tensor:
     return samples + noise
 
 
-def fgsm(samples: torch.Tensor, labels: torch.Tensor, model: torch.Module, loss_fn, epsilon: float) -> torch.Tensor:
+def fgsm(samples: torch.Tensor, labels: torch.Tensor, model, loss_fn, epsilon) -> torch.Tensor:
     """
     Applies the Fast Gradient Sign Method (FGSM) to perturb the input tensor.
 
